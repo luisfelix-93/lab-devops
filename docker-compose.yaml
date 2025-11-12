@@ -1,0 +1,68 @@
+services:
+  # 1. O serviço da nossa API (o cérebro)
+  api:
+    # 'build:' diz ao Compose para usar o nosso Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Mapeia a porta do container (8080) para a sua máquina (8080)
+    ports:
+      - "8080:8080"
+    
+    # Volumes:
+    volumes:
+      # CRÍTICO: Permite que o container da API controle o Docker
+      # (para que o nosso executor possa rodar 'docker run')
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      
+      # Persiste os dados da API (o banco SQLite e os temp files)
+      # na sua máquina host, na pasta ./data
+      - ./data:/app/data
+    
+    # Conecta à nossa rede partilhada
+    networks:
+      - minha-rede-lab
+      
+    # Garante que o LocalStack inicie ANTES da API
+    depends_on:
+      - simulador-iac
+
+  # 2. O serviço do LocalStack (o simulador de nuvem)
+  simulador-iac:
+    image: localstack/localstack:latest
+    
+    # CRÍTICO: Define o nome do host dentro da rede.
+    # O nosso código (provider.tf) refere-se a 'http://simulador-iac:4566'
+    hostname: simulador-iac
+    
+    # Expõe a porta principal do LocalStack (API e Web UI)
+    ports:
+      - "4566:4566"
+    
+    # Variáveis de ambiente para o LocalStack
+    environment:
+      # Habilita os serviços que o nosso executor espera
+      - SERVICES=ec2,s3,lambda,sqs
+      - DEBUG=1
+      
+    # Volumes:
+    volumes:
+      # Persiste os dados do LocalStack (recursos "criados")
+      - localstack_data:/var/lib/localstack
+      
+      # Permite ao LocalStack usar o Docker (ex: para simular o Lambda)
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      
+    # Conecta à nossa rede partilhada
+    networks:
+      - minha-rede-lab
+
+# Define a rede partilhada
+networks:
+  minha-rede-lab:
+    name: minha-rede-lab
+
+# Define os volumes persistentes
+volumes:
+  localstack_data: {}
