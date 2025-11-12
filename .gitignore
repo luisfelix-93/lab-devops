@@ -52,7 +52,7 @@ localstack_data/
 # Build output
 build/
 dist/
-
+*.tf
 # OS generated files
 .terraform/
 .terraform.lock.hcl

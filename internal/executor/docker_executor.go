@@ -22,6 +22,7 @@ provider "aws" {
 	skip_credentials_validation = true
 	skip_metadata_api_check 	= true
 	skip_requesting_account_id 	= true
+	s3_use_path_style = true
 
 	endpoints {
 		s3 		= "http://simulador-iac:4566"
@@ -35,6 +36,7 @@ provider "aws" {
 type dockerExecutor struct {
 	dockerNetwork string
 	tempDirRoot   string
+	hostExecPath  string // <-- NOVO CAMPO
 }
 
 func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Executor, error) {
@@ -42,10 +44,17 @@ func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Execut
 		return nil, fmt.Errorf("falha ao criar diretório temporário raiz %s: %w", tempDirRoot, err)
 	}
 
+	hostPath := os.Getenv("HOST_EXEC_PATH")
+	if hostPath == "" {
+		return nil, fmt.Errorf("variável de ambiente HOST_EXEC_PATH não está definida")
+	}
+
 	return &dockerExecutor{
 		dockerNetwork: dockerNetwork,
 		tempDirRoot:   tempDirRoot,
+		hostExecPath:  hostPath,
 	}, nil
+
 }
 func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionConfig) (<-chan service.ExecutionResult, <-chan service.ExecutionFinalState, error) {
 	logStream := make(chan service.ExecutionResult)
@@ -101,16 +110,14 @@ func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionCon
 
 		newState, readErr := e.readFinalState(execDir, config)
 		if readErr != nil {
-			// Se a execução falhou, o .tfstate pode não existir,
-			// mas o erro de execução (execErr) é mais importante.
 			if execErr == nil {
-				execErr = readErr // Só reporta o erro de leitura se a execução foi OK
+				execErr = readErr
 			}
 		}
 
 		finalState <- service.ExecutionFinalState{
 			NewState: newState,
-			Error:    execErr, // Este é o erro do 'terraform apply'
+			Error:    execErr,
 		}
 		log.Printf("INFO [Executor]: Goroutine para %s finalizada.", config.WorkspaceID)
 
@@ -129,7 +136,12 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		return "", err
 	}
 
-	if config.Type == domain.TypeTerraform {
+	log.Printf("DEBUG [Executor]: a preparar workspace. Tipo recebido: '%s'", config.Type)
+	log.Printf("DEBUG [Executor]: a comparar com: '%s'", domain.TypeTerraform)
+
+	switch config.Type {
+	case domain.TypeTerraform:
+		log.Printf("DEBUG [Executor]: 'if' deu VERDADEIRO. A escrever ficheiros Terraform...")
 		if err := os.WriteFile(filepath.Join(execDir, "main.tf"), []byte(config.Code), 0644); err != nil {
 			return "", err
 		}
@@ -139,7 +151,7 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		if err := os.WriteFile(filepath.Join(execDir, "terraform.tfState"), config.State, 0644); err != nil {
 			return "", err
 		}
-	} else if config.Type == domain.TypeAnsible {
+	case domain.TypeAnsible:
 		// TODO: Lógica para Ansible
 	}
 
@@ -149,15 +161,18 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, config domain.ExecutionConfig) (*exec.Cmd, error) {
 	if config.Type == domain.TypeTerraform {
 		image := "hashicorp/terraform:latest"
-		tfCommand := "terraform init && terraform apply -auto-aprove"
-
+		tfCommand := "terraform init && terraform apply -auto-approve"
+		
+		hostDir := filepath.Join(e.hostExecPath, config.WorkspaceID)
+		
 		args := []string{
 			"run", "--rm",
 			"--network", e.dockerNetwork,
-			"-v", fmt.Sprintf("%s:/workspace", execDir),
+			"-v", fmt.Sprintf("%s:/workspace", hostDir),
+			"--entrypoint", "sh",
 			"-w", "/workspace",
 			image,
-			"sh", "-c", tfCommand,
+			"-c", tfCommand,
 		}
 
 		return exec.CommandContext(ctx, "docker", args...), nil
@@ -182,10 +197,9 @@ func (e *dockerExecutor) readFinalState(execDir string, config domain.ExecutionC
 
 	statePath := filepath.Join(execDir, "terraform.tfstate")
 
-	// Verifica se o arquivo de estado existe
 	if _, err := os.Stat(statePath); os.IsNotExist(err) {
 		log.Printf("AVISO [Executor]: Arquivo .tfstate não encontrado após execução (pode ser normal se 'apply' falhou): %s", statePath)
-		return nil, nil // Não é um erro, apenas não há estado
+		return nil, nil
 	}
 
 	data, err := os.ReadFile(statePath)
