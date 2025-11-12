@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: minha-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./data:/app/data
+    networks:
+      - minha-rede-lab
+    depends_on:
+      - simulador-iac
+    environment:
+      - HOST_EXEC_PATH=${PWD}/data/temp-exec
+
+  simulador-iac:
+    image: localstack/localstack:latest
+    hostname: simulador-iac
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=ec2,s3,lambda,sqs
+      - DEBUG=1
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - minha-rede-lab
+
+networks:
+  minha-rede-lab:
+    name: minha-rede-lab
+
+volumes:
+  localstack_data: {}
+  exec-data: {} 

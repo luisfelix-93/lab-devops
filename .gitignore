@@ -1,0 +1,61 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, generated with `go test -c`
+*.test
+
+# Output of the go tool when building a static binary
+*.a
+
+# Documentation for Go projects
+*.md
+
+# Project-local glide cache, generated with `glide install`
+.glide/
+
+# Go workspace file
+go.work
+
+# Dependency directories (example: "vendor/")
+vendor/
+
+# IDE-related files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker-related files
+*.env
+.dockerignore
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+
+# Temporary files
+*~
+.#*
+.DS_Store
+Thumbs.db
+
+# LocalStack data
+localstack_data/
+
+# Build output
+build/
+dist/
+*.tf
+# OS generated files
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.tfstate.lock.info
