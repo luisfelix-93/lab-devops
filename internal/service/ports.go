@@ -29,5 +29,6 @@ type WorkspaceRepository interface {
 	UpdateWorkspaceState(ctx context.Context, workspaceId string, state []byte) error
 	GetWorkspaceState(ctx context.Context, workspaceId string) ([]byte, error)
 	CreateWorkspace(ctx context.Context, labId string) (*domain.Workspace, error)
-
+	CreateLab(ctx context.Context, lab *domain.Lab) error
+	CleanLab(ctx context.Context, labId string) error
 }

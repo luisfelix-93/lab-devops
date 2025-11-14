@@ -16,7 +16,15 @@ func RegisterRoutes(e *echo.Echo, h *Handler) {
 	// Rota para executar um Lab (WebSocket)
 	// ex: WS /api/v1/labs/lab-tf-01/execute
 	g.GET("/labs/:labID/execute", h.HandlerLabExecute)
+
 	
-	// TODO: Adicionar uma rota para listar todos os labs
-	// g.GET("/labs", h.HandleListLabs)
+	
+	// Rota para listar todos os labs
+	g.GET("/labs", h.HandleListLabs)
+
+	// Rota para criar um laboratório
+	g.POST("/labs", h.HandlerCreateLab)
+
+	// Rota para deletar um laboratório
+	g.DELETE("/labs/:labId", h.HandlerDeleteLab)
 }
