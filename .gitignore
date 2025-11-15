@@ -10,9 +10,6 @@
 # Output of the go tool when building a static binary
 *.a
 
-# Documentation for Go projects
-*.md
-
 # Project-local glide cache, generated with `glide install`
 .glide/
 
@@ -59,3 +56,7 @@ dist/
 terraform.tfstate
 terraform.tfstate.backup
 .terraform.tfstate.lock.info
+
+# Documentações 
+PR_Summary.md
+release_notes.md
