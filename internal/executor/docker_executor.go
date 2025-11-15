@@ -32,6 +32,10 @@ provider "aws" {
 	}
 }
 `
+const ansibleLocalInventory = `
+[local]
+localhost ansible_connection=local
+`
 
 type dockerExecutor struct {
 	dockerNetwork string
@@ -152,18 +156,26 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 			return "", err
 		}
 	case domain.TypeAnsible:
-		// TODO: Lógica para Ansible
+		log.Printf("DEBUG [Executor]: A escrever ficheiros Ansible...")
+		if err := os.WriteFile(filepath.Join(execDir, "playbook.yml"), []byte(config.Code), 0644); err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(filepath.Join(execDir, "inventory.ini"), []byte(ansibleLocalInventory), 0644); err != nil {
+			return "", err
+		}
 	}
 
 	return execDir, nil
 }
 
 func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, config domain.ExecutionConfig) (*exec.Cmd, error) {
-	if config.Type == domain.TypeTerraform {
+	hostDir := filepath.Join(e.hostExecPath, config.WorkspaceID)
+	switch config.Type {
+	case domain.TypeTerraform:
 		image := "hashicorp/terraform:latest"
 		tfCommand := "terraform init && terraform apply -auto-approve"
 		
-		hostDir := filepath.Join(e.hostExecPath, config.WorkspaceID)
+		
 		
 		args := []string{
 			"run", "--rm",
@@ -176,8 +188,25 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 		}
 
 		return exec.CommandContext(ctx, "docker", args...), nil
-	} //if config.Type == domain.TypeAnsible
+	case domain.TypeAnsible:
+		image := "cytopia/ansible:latest"
+		ansibleCommand := "ansible-playbook -i inventory.ini playbook.yml"
 
+		args := []string{
+			"run", "--rm",
+			// Adicionamos a rede para que o Ansible possa, por exemplo,
+			// contactar o 'simulador-iac' (LocalStack) se necessário.
+			"--network", e.dockerNetwork, 
+			"-v", fmt.Sprintf("%s:/workspace", hostDir),
+			"--entrypoint", "sh",
+			"-w", "/workspace",
+			image,
+			"-c", ansibleCommand,
+		}
+		
+		return exec.CommandContext(ctx, "docker", args...), nil
+	}
+	
 	return nil, fmt.Errorf("tipo de execução desconhecido: %s", config.Type)
 }
 

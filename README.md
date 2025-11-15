@@ -13,7 +13,7 @@ The execution environment is simulated using **LocalStack** to provision cloud r
 
 ## Features
 
-- **IaC Code Execution**: Initial support for Terraform, with an extensible architecture for other tools.
+- **IaC Code Execution**: Supports **Terraform** and **Ansible**, with an extensible architecture for other tools.
 - **Real-time Feedback**: Execution logs are streamed via WebSocket.
 - **Simulated Environment**: Uses LocalStack to simulate cloud services, cost-free and securely.
 - **Data Persistence**: User progress and labs are saved in an SQLite database.
