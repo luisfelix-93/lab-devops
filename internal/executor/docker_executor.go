@@ -190,7 +190,7 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 		return exec.CommandContext(ctx, "docker", args...), nil
 	case domain.TypeAnsible:
 		image := "cytopia/ansible:latest"
-		ansibleCommand := "ansible-playbook -i iventory.ini playbook.yml"
+		ansibleCommand := "ansible-playbook -i inventory.ini playbook.yml"
 
 		args := []string{
 			"run", "--rm",
