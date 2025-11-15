@@ -37,6 +37,13 @@ type ServerMessage struct {
 	Payload string `json:"payload,omitempty"`
 }
 
+type CreateLabRequest struct {
+    Title        string `json:"title"`
+    Type         string `json:"type"`
+    Instructions string `json:"instructions"`
+    InitialCode  string `json:"initial_code"`
+}
+
 func (h *Handler) HandlerLabExecute(c echo.Context) error {
 	labID := c.Param("labID")
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
@@ -148,4 +155,37 @@ func (h *Handler) HandleGetLabDetails(c echo.Context) error {
 	}
 	
 	return c.JSON(http.StatusOK, response)
+}
+
+func (h *Handler) HandleListLabs(c echo.Context) error {
+	labs, err := h.labService.ListLabs(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, labs)
+}
+
+func (h *Handler) HandlerCreateLab(c echo.Context) error {
+	var req CreateLabRequest
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Payload inválido"}) 
+	}
+
+	lab, err := h.labService.CreateLab(c.Request().Context(), req.Title, req.Type, req.Instructions, req.InitialCode)
+    if err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+    }
+
+    return c.JSON(http.StatusCreated, lab)
+}
+
+func (h * Handler) HandlerDeleteLab(c echo.Context) error {
+	labId := c.Param("labId")
+	err := h.labService.CleanLab(c.Request().Context(), labId)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Lab deletado com sucesso"})
 }

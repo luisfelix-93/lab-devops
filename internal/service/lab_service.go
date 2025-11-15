@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"lab-devops/internal/domain"
+
+	"github.com/google/uuid"
 )
 
 type LabService struct {
@@ -88,4 +90,50 @@ func (s *LabService) GetLabDetails(ctx context.Context, labID string) (*domain.L
 	}
 
 	return lab, ws, nil
+}
+
+func (s *LabService) CreateLab(ctx context.Context, title, labType, instructions, initialCode string) (*domain.Lab, error) {
+    // Validação básica
+    if title == "" || labType == "" {
+        return nil, fmt.Errorf("titulo e tipo são obrigatórios")
+    }
+
+    newLab := &domain.Lab{
+        ID:           uuid.New().String(), // Gera um ID único
+        Title:        title,
+        Type:         labType,
+        Instructions: instructions,
+        InitialCode:  initialCode,
+        // CreatedAt será definido pelo banco ou podemos definir aqui se preferir
+    }
+
+    if err := s.repo.CreateLab(ctx, newLab); err != nil {
+        return nil, fmt.Errorf("falha ao criar lab: %w", err)
+    }
+
+    return newLab, nil
+}
+
+func (s *LabService) ListLabs(ctx context.Context) ([]*domain.Lab, error) {
+	labs, err := s.repo.ListLabs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("falha ao listar labs: %w", err)
+	}
+	return labs, nil
+}
+
+func (s *LabService) GetWorkspaceState(ctx context.Context, workspaceID string) ([]byte, error) {
+	state, err := s.repo.GetWorkspaceState(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("falha ao obter estado do workspace %s: %w", workspaceID, err)
+	}
+	return state, nil
+}
+
+func (s *LabService) CleanLab(ctx context.Context, labId string) error {
+	err := s.repo.CleanLab(ctx, labId)
+	if err != nil {
+		return fmt.Errorf("erro ao apagar laboratório: %w", err)
+	}
+	return err
 }

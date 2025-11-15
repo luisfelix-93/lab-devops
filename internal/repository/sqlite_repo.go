@@ -187,3 +187,28 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 	return &ws, nil
 }
 
+func (r *sqlRepository) CreateLab(ctx context.Context, lab *domain.Lab) error {
+
+	query := `
+		INSERT INTO labs (id, title, type, instructions, initial_code, created_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	`
+
+	_, err := r.db.ExecContext(ctx, query,
+		lab.ID,
+		lab.Title,
+		lab.Type,
+		lab.Instructions,
+		lab.InitialCode,
+	)
+	return err
+}
+
+func (r *sqlRepository) CleanLab(ctx context.Context, labId string) error {
+	query := `
+		DELETE FROM labs WHERE id = ?
+	`
+
+	_, err := r.db.ExecContext(ctx, query, labId)
+	return err
+}
