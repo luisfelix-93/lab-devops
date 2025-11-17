@@ -11,8 +11,10 @@
 *.a
 
 # Documentation for Go projects
-*.md
-
+OBJECTCHANGELOG.md
+PR_SUMMARY.md
+release_notes.md
+PR_SUMMARY_PT.md
 # Project-local glide cache, generated with `glide install`
 .glide/
 

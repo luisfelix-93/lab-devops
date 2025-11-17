@@ -62,6 +62,13 @@ func (s *LabService) ExecuteLab(
 	return logStream, finalState, nil
 }
 
+func (s *LabService) SaveWorkspaceStatus(ctx context.Context, workspaceId string, status string) error {
+	if err := s.repo.UpdateWorkspaceStatus(ctx, workspaceId, status); err != nil {
+		return fmt.Errorf("falha ao salvar o status do wokspace %s: %w", workspaceId, err)
+	}
+	return nil
+}
+
 func (s *LabService) SaveWorkspaceState(ctx context.Context, workspaceID string, state []byte) error {
 	if err := s.repo.UpdateWorkspaceState(ctx, workspaceID, state); err != nil {
 		return fmt.Errorf("falha ao salvar o estado final do workspace %s: %w", workspaceID, err)

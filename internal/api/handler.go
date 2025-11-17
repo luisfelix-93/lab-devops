@@ -106,13 +106,21 @@ func (h *Handler) HandlerLabExecute(c echo.Context) error {
 					// Não salvamos o estado se deu erro
 					return
 				}
-
+				//Sucesso! (Exit Code 0)
 				// Se a execução foi bem-sucedida, salva o novo estado
-				log.Printf("INFO [Handler]: Execução concluída, salvando estado...")
-				// TODO: Precisamos do WorkspaceID aqui!
-				// (Vamos precisar de um ajuste no service ou no handler)
-				// Por agora, apenas notificamos o sucesso.
-				// h.labService.SaveWorkspaceState(ctx, wsID, state.NewState)
+				log.Printf("INFO [Handler]: Execução concluída, salvando estado para Workspace %s...", state.WorkspaceID)
+				if err := h.labService.SaveWorkspaceState(ctx, state.WorkspaceID, state.NewState); err != nil {
+					log.Printf("ERRO [Handler]: Falha ao salvar estado do workspace: %v", err)
+					// Mesmo que salvar o estado falhe, a execução em si foi um sucesso.
+					// Poderíamos decidir enviar um erro aqui, mas por enquanto vamos notificar o sucesso.
+					ws.WriteJSON(ServerMessage{Type: "error", Payload: "Falha ao salvar o estado final da execução."})
+					return
+				}
+
+				if err := h.labService.SaveWorkspaceStatus(ctx, state.WorkspaceID, "complete"); err != nil {
+					log.Printf("ERRO [Handler]: Falha ao salvar status do workspace: %v", err)
+					return
+				}
 				
 				ws.WriteJSON(ServerMessage{Type: "complete", Payload: "Execução concluída com sucesso!"})
 				return // Termina a goroutine

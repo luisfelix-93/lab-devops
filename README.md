@@ -13,11 +13,12 @@ The execution environment is simulated using **LocalStack** to provision cloud r
 
 ## Features
 
-- **IaC Code Execution**: Supports **Terraform** and **Ansible**, with an extensible architecture for other tools.
+- **IaC & Automation Code Execution**: Supports **Terraform** and **Ansible**, with an extensible architecture for other tools.
 - **Real-time Feedback**: Execution logs are streamed via WebSocket.
 - **Simulated Environment**: Uses LocalStack to simulate cloud services, cost-free and securely.
-- **Data Persistence**: User progress and labs are saved in an SQLite database.
+- **Data Persistence**: User progress, labs, and workspace status are saved in an SQLite database.
 - **Docker Isolation**: Each lab execution runs in a temporary Docker container.
+- **Workspace Status Tracking**: Tracks the completion status of labs, enabling user progress validation.
 
 ## Architecture
 
@@ -41,6 +42,20 @@ The project follows a layered architecture for separation of concerns:
     -   Location: `internal/executor/`
     -   Responsibility: Handle code execution in external environments (in this case, Docker containers).
     -   Technologies: `Docker Engine`.
+
+## Supported Lab Types
+
+The platform currently supports two types of labs:
+
+### Terraform Labs
+Execute Infrastructure as Code (IaC) using Terraform. Users can provision cloud resources in the simulated LocalStack environment.
+
+### Ansible Labs
+Execute automation playbooks using Ansible. The system:
+- Dynamically creates `playbook.yml` with user-provided code
+- Generates an `inventory.ini` file for localhost configuration
+- Runs playbooks in isolation using the `cytopia/ansible:latest` Docker image
+- Enables communication with other services (e.g., LocalStack) on the Docker network
 
 ## How to Run the Project
 
@@ -125,6 +140,24 @@ Initiates a WebSocket connection to execute lab code and receive real-time logs.
 The project uses **SQLite** as its database. The database file is created at `./data/lab.db`.
 
 Schema migrations are located in `db/migrations/`. The `001_init_schema.sql` file contains the initial structure for the `labs` and `workspaces` tables.
+
+### Database Schema
+
+The `workspaces` table includes:
+- `id`: Unique identifier for the workspace
+- `lab_id`: Reference to the associated lab
+- `user_id`: Reference to the user
+- `status`: Workspace completion status (`in_progress` or `complete`)
+- `state`: JSON representation of the workspace state
+
+This schema enables tracking of user progress and validation of lab submissions.
+
+## Recent Updates
+
+### November 17, 2025
+- **Workspace Status Tracking**: Added the ability to track workspace completion status. After successful lab execution, the workspace is marked as `"complete"`.
+- **Enhanced State Management**: The `WorkspaceID` is now properly captured and used when saving the final state of a lab execution.
+- **Ansible Support**: Full support for executing Ansible playbooks with dynamic inventory configuration and Docker isolation.
 
 ## How to Contribute
 

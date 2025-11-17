@@ -59,6 +59,7 @@ func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.L
 		&lab.Instructions,
 		&lab.InitialCode,
 		&lab.CreatedAt,
+
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -83,6 +84,7 @@ func (r *sqlRepository) GetWorkspaceByLabID(ctx context.Context, labID string) (
 		&ws.UserCode,
 		&ws.State,
 		&ws.UpdatedAt,
+		&ws.Status,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -180,6 +182,7 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 		&ws.UserCode,
 		&ws.State,
 		&ws.UpdatedAt,
+		&ws.Status,
 	); err != nil {
 		return nil, err
 	}
@@ -210,5 +213,13 @@ func (r *sqlRepository) CleanLab(ctx context.Context, labId string) error {
 	`
 
 	_, err := r.db.ExecContext(ctx, query, labId)
+	return err
+}
+
+func (r *sqlRepository) UpdateWorkspaceStatus(ctx context.Context, workspaceId string, status string) error {
+	query := `
+		UPDATE workspaces SET status = ? WHERE id = ?
+	`
+	_, err := r.db.ExecContext(ctx, query, status, workspaceId)
 	return err
 }
