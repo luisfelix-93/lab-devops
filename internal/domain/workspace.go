@@ -8,4 +8,6 @@ type Workspace struct {
 	UserCode  string 	`json:"user_code"`
 	State     []byte 	`json:"state"`
 	UpdatedAt time.Time `json:"updated_at"`
-}
+
+	Status    string    `json:"status"`
+}	

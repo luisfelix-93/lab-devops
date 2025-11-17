@@ -11,8 +11,9 @@ type ExecutionResult struct {
 }
 
 type ExecutionFinalState struct {
-	NewState []byte
-	Error    error
+	WorkspaceID string
+	NewState    []byte
+	Error       error
 }
 
 type Executor interface {
@@ -31,4 +32,5 @@ type WorkspaceRepository interface {
 	CreateWorkspace(ctx context.Context, labId string) (*domain.Workspace, error)
 	CreateLab(ctx context.Context, lab *domain.Lab) error
 	CleanLab(ctx context.Context, labId string) error
+	UpdateWorkspaceStatus(ctx context.Context, workspaceId string, status string) error
 }

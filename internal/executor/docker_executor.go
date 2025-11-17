@@ -72,7 +72,7 @@ func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionCon
 		execDir, err := e.prepareWorkspace(config)
 		if err != nil {
 			log.Printf("ERRO [Executor]: Falha ao preparar workspace: %v", err)
-			finalState <- service.ExecutionFinalState{Error: fmt.Errorf("falha ao preparar workspace: %w", err)}
+			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao preparar workspace: %w", err)}
 			return
 		}
 
@@ -81,18 +81,18 @@ func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionCon
 		cmd, err := e.buildCommand(ctx, execDir, config)
 		if err != nil {
 			log.Printf("ERRO [Executor]: Falha ao montar comando: %v", err)
-			finalState <- service.ExecutionFinalState{Error: fmt.Errorf("falha ao montar comando: %w", err)}
+			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao montar comando: %w", err)}
 			return
 		}
 
 		stdoutPipe, err := cmd.StdoutPipe()
 		if err != nil {
-			finalState <- service.ExecutionFinalState{Error: fmt.Errorf("falha ao obter stdout pipe: %w", err)}
+			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stdout pipe: %w", err)}
 			return
 		}
 		stderrPipe, err := cmd.StderrPipe()
 		if err != nil {
-			finalState <- service.ExecutionFinalState{Error: fmt.Errorf("falha ao obter stderr pipe: %w", err)}
+			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stderr pipe: %w", err)}
 			return
 		}
 
@@ -102,8 +102,8 @@ func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionCon
 		go e.streamPipe(stderrPipe, logStream, &wg)
 
 		log.Printf("INFO [Executor]: Iniciando execução para %s...", config.WorkspaceID)
-		if err := cmd.Start(); err != nil {
-			finalState <- service.ExecutionFinalState{Error: fmt.Errorf("falha ao iniciar comando: %w", err)}
+if err := cmd.Start(); err != nil {
+			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao iniciar comando: %w", err)}
 			return
 		}
 
@@ -120,8 +120,9 @@ func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionCon
 		}
 
 		finalState <- service.ExecutionFinalState{
-			NewState: newState,
-			Error:    execErr,
+			WorkspaceID: config.WorkspaceID,
+			NewState:    newState,
+			Error:       execErr,
 		}
 		log.Printf("INFO [Executor]: Goroutine para %s finalizada.", config.WorkspaceID)
 
