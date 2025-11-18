@@ -72,7 +72,7 @@ func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.L
 
 // GetWorkspaceByLabID busca o progresso de um utilizador.
 func (r *sqlRepository) GetWorkspaceByLabID(ctx context.Context, labID string) (*domain.Workspace, error) {
-	query := `SELECT id, lab_id, user_code, state, updated_at 
+	query := `SELECT id, lab_id, user_code, state, updated_at, status 
 	          FROM workspaces WHERE lab_id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, labID)
@@ -171,8 +171,7 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 	if err != nil {
 		return nil, err
 	}
-
-	selectQuery := `SELECT id, lab_id, user_code, state, updated_at FROM workspaces WHERE id = ?`
+	selectQuery := `SELECT id, lab_id, user_code, state, updated_at, status FROM workspaces WHERE lab_id = ?`
 	row := r.db.QueryRowContext(ctx, selectQuery, newWorkspaceID)
 
 	var ws domain.Workspace

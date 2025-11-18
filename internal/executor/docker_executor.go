@@ -164,6 +164,11 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		if err := os.WriteFile(filepath.Join(execDir, "inventory.ini"), []byte(ansibleLocalInventory), 0644); err != nil {
 			return "", err
 		}
+	case domain.TypeLinux:
+		log.Printf("DEBUG [Executor]: A escrever ficheiros Linux ... ")
+		if err := os.WriteFile(filepath.Join(execDir, "run.sh"), []byte(config.Code), 0755); err != nil {
+			return "", err
+		}
 	}
 
 	return execDir, nil
@@ -203,6 +208,22 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 			"-w", "/workspace",
 			image,
 			"-c", ansibleCommand,
+		}
+		
+		return exec.CommandContext(ctx, "docker", args...), nil
+	
+	case domain.TypeLinux:
+		image := "alpine:latest"
+		linuxCommand := "./run.sh"
+
+		args := []string {
+			"run", "--rm",
+			"--network", e.dockerNetwork,
+			"-v", fmt.Sprintf("%s:/workspace", hostDir),
+			"--entrypoint", "sh",
+			"-w", "/workspace",
+			image,
+			"-c", linuxCommand,
 		}
 		
 		return exec.CommandContext(ctx, "docker", args...), nil
