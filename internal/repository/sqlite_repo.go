@@ -46,7 +46,8 @@ func NewSQLiteRepository(dbPath string, migrationScriptPath string) (service.Wor
 
 }
 func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.Lab, error) {
-	query := `SELECT id, title, type, instructions, initial_code, created_at 
+	query := `SELECT id, title, type, instructions, initial_code, created_at, 
+	                 track_id, lab_order
 	          FROM labs WHERE id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, labID)
@@ -59,20 +60,21 @@ func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.L
 		&lab.Instructions,
 		&lab.InitialCode,
 		&lab.CreatedAt,
-
+		&lab.TrackID,  
+		&lab.LabOrder, 
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // Nenhum lab encontrado, não é um erro fatal
+			return nil, nil
 		}
 		return nil, err
 	}
 	return &lab, nil
 }
 
-// GetWorkspaceByLabID busca o progresso de um utilizador.
+
 func (r *sqlRepository) GetWorkspaceByLabID(ctx context.Context, labID string) (*domain.Workspace, error) {
-	query := `SELECT id, lab_id, user_code, state, updated_at, status 
+	query := `SELECT id, lab_id, user_code, state, updated_at 
 	          FROM workspaces WHERE lab_id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, labID)
@@ -119,7 +121,9 @@ func (r *sqlRepository) GetWorkspaceState(ctx context.Context, workspaceID strin
 // --- Métodos por implementar (para completar a interface) ---
 
 func (r *sqlRepository) ListLabs(ctx context.Context) ([]*domain.Lab, error) {
-	query := `SELECT id, title, type, instructions, initial_code, created_at FROM labs`
+	query := `SELECT id, title, type, instructions, initial_code, created_at,
+	                 track_id, lab_order
+	          FROM labs ORDER BY lab_order ASC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -136,6 +140,8 @@ func (r *sqlRepository) ListLabs(ctx context.Context) ([]*domain.Lab, error) {
 			&lab.Instructions,
 			&lab.InitialCode,
 			&lab.CreatedAt,
+			&lab.TrackID,  // Novo
+			&lab.LabOrder, // Novo
 		); err != nil {
 			return nil, err
 		}
@@ -171,7 +177,8 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 	if err != nil {
 		return nil, err
 	}
-	selectQuery := `SELECT id, lab_id, user_code, state, updated_at, status FROM workspaces WHERE lab_id = ?`
+
+	selectQuery := `SELECT id, lab_id, user_code, state, updated_at FROM workspaces WHERE id = ?`
 	row := r.db.QueryRowContext(ctx, selectQuery, newWorkspaceID)
 
 	var ws domain.Workspace
@@ -190,20 +197,19 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 }
 
 func (r *sqlRepository) CreateLab(ctx context.Context, lab *domain.Lab) error {
-
-	query := `
-		INSERT INTO labs (id, title, type, instructions, initial_code, created_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-	`
-
-	_, err := r.db.ExecContext(ctx, query,
-		lab.ID,
-		lab.Title,
-		lab.Type,
-		lab.Instructions,
-		lab.InitialCode,
-	)
-	return err
+    query := `
+        INSERT INTO labs (id, title, type, instructions, initial_code, track_id, lab_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`
+    _, err := r.db.ExecContext(ctx, query, 
+        lab.ID, 
+        lab.Title, 
+        lab.Type, 
+        lab.Instructions, 
+        lab.InitialCode,
+		lab.TrackID,
+		lab.LabOrder,
+    )
+    return err
 }
 
 func (r *sqlRepository) CleanLab(ctx context.Context, labId string) error {
@@ -220,5 +226,83 @@ func (r *sqlRepository) UpdateWorkspaceStatus(ctx context.Context, workspaceId s
 		UPDATE workspaces SET status = ? WHERE id = ?
 	`
 	_, err := r.db.ExecContext(ctx, query, status, workspaceId)
+	return err
+}
+
+func (r *sqlRepository) ListTracks(ctx context.Context) ([]*domain.Track, error) {
+	query := `SELECT id, title, description, created_at FROM tracks ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tracks []*domain.Track
+	for rows.Next() {
+		var track domain.Track
+		if err := rows.Scan(
+			&track.ID,
+			&track.Title,
+			&track.Description,
+			&track.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		tracks = append(tracks, &track)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return tracks, nil
+}
+
+func (r *sqlRepository) ListLabsByTrackID(ctx context.Context, trackID string) ([]*domain.Lab, error) {
+	query := `SELECT id, title, type, instructions, initial_code, created_at,
+	                 track_id, lab_order
+	          FROM labs WHERE track_id = ? ORDER BY lab_order ASC`
+	rows, err := r.db.QueryContext(ctx, query, trackID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var labs []*domain.Lab
+	for rows.Next() {
+		var lab domain.Lab
+		if err := rows.Scan(
+			&lab.ID,
+			&lab.Title,
+			&lab.Type,
+			&lab.Instructions,
+			&lab.InitialCode,
+			&lab.CreatedAt,
+			&lab.TrackID,
+			&lab.LabOrder,
+		); err != nil {
+			return nil, err
+		}
+		labs = append(labs, &lab)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return labs, nil
+}
+
+func (r *sqlRepository) CreateTrack(ctx context.Context, track *domain.Track) error {
+	query := `
+	INSERT INTO tracks (id, title, description)
+		VALUES (?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query, 
+		track.ID, 
+		track.Title,
+		track.Description,	
+	)
+
 	return err
 }

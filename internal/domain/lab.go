@@ -9,4 +9,7 @@ type Lab struct {
 	Instructions string    `json:"instructions"`
 	InitialCode  string    `json:"initial_code"`
 	CreatedAt    time.Time `json:"created_at"`
+
+	TrackID      string    `json:"track_id"`
+	LabOrder     int       `json:"lab_order"`
 }
