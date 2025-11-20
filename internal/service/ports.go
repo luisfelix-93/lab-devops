@@ -33,4 +33,9 @@ type WorkspaceRepository interface {
 	CreateLab(ctx context.Context, lab *domain.Lab) error
 	CleanLab(ctx context.Context, labId string) error
 	UpdateWorkspaceStatus(ctx context.Context, workspaceId string, status string) error
+
+	ListTracks(ctx context.Context) ([]*domain.Track, error)
+	ListLabsByTrackID(ctx context.Context, trackID string) ([]*domain.Lab, error)
+	CreateTrack(ctx context.Context, track *domain.Track) error
+	
 }

@@ -5,6 +5,7 @@ type ExecutionType string
 const (
 	TypeTerraform ExecutionType = "terraform"
 	TypeAnsible   ExecutionType = "ansible"
+	TypeLinux     ExecutionType = "linux"
 )
 
 type ExecutionConfig struct {
