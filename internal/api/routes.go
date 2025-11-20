@@ -23,8 +23,12 @@ func RegisterRoutes(e *echo.Echo, h *Handler) {
 	g.GET("/labs", h.HandleListLabs)
 
 	// Rota para criar um laboratório
-	g.POST("/labs", h.HandlerCreateLab)
+	g.POST("/labs", h.HandleCreateLab)
 
 	// Rota para deletar um laboratório
 	g.DELETE("/labs/:labId", h.HandlerDeleteLab)
+
+	g.GET("/tracks", h.HandleListTracks)
+    // Rota para criar uma nova Trilha
+    g.POST("/tracks", h.HandleCreateTrack)
 }

@@ -16,7 +16,7 @@ WORKDIR /app
 
 # 4. Copiar os arquivos de módulo e baixar dependências
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # 5. Copiar TODO o resto do código-fonte
 COPY . .
@@ -25,7 +25,7 @@ COPY . .
 # -o /app/lab-api : Salva o binário compilado como 'lab-api'
 # -ldflags="-s -w" : Deixa o binário menor (remove símbolos de debug)
 # ./cmd/lab-api/main.go : O ponto de entrada
-RUN go build -o /app/lab-api -ldflags="-s -w" ./cmd/lab-api/main.go
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod go build -o /app/lab-api -ldflags="-s -w" ./cmd/lab-api/main.go
 
 # 
 # STAGE 2: A Imagem Final (Final)

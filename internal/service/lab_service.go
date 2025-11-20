@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"lab-devops/internal/domain"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -99,7 +100,7 @@ func (s *LabService) GetLabDetails(ctx context.Context, labID string) (*domain.L
 	return lab, ws, nil
 }
 
-func (s *LabService) CreateLab(ctx context.Context, title, labType, instructions, initialCode string) (*domain.Lab, error) {
+func (s *LabService) CreateLab(ctx context.Context, title, labType, instructions, initialCode, trackID string, labOrder int) (*domain.Lab, error) {
     // Validação básica
     if title == "" || labType == "" {
         return nil, fmt.Errorf("titulo e tipo são obrigatórios")
@@ -111,6 +112,8 @@ func (s *LabService) CreateLab(ctx context.Context, title, labType, instructions
         Type:         labType,
         Instructions: instructions,
         InitialCode:  initialCode,
+		TrackID:      trackID,
+		LabOrder:     labOrder,
         // CreatedAt será definido pelo banco ou podemos definir aqui se preferir
     }
 
@@ -143,4 +146,42 @@ func (s *LabService) CleanLab(ctx context.Context, labId string) error {
 		return fmt.Errorf("erro ao apagar laboratório: %w", err)
 	}
 	return err
+}
+
+
+func (s *LabService) CreateTrack(ctx context.Context, title, description string) (*domain.Track, error) {
+    if title == "" {
+        return nil, fmt.Errorf("titulo é obrigatório")
+    }
+
+    newTrack := &domain.Track{
+        ID:           uuid.New().String(),
+        Title:        title,
+        Description:  description,
+    }
+
+    if err := s.repo.CreateTrack(ctx, newTrack); err != nil {
+        return nil, fmt.Errorf("falha ao criar trilha: %w", err)
+    }
+
+    return newTrack, nil
+}
+
+// ListTracks lista todas as trilhas e seus labs
+func (s *LabService) ListTracks(ctx context.Context) ([]*domain.Track, error) {
+    tracks, err := s.repo.ListTracks(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("falha ao listar trilhas: %w", err)
+    }
+
+    for _, track := range tracks {
+        labs, err := s.repo.ListLabsByTrackID(ctx, track.ID)
+        if err != nil {
+            log.Printf("AVISO: Falha ao carregar labs para trilha %s: %v", track.ID, err)
+            continue 
+        }
+        track.Labs = labs
+    }
+
+    return tracks, nil
 }
