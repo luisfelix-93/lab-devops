@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"strings"
 )
 
 const localstackProviderConfig = `
@@ -141,13 +142,15 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		return "", err
 	}
 
+	cleanCode := strings.ReplaceAll(config.Code, "\r\n", "\n");
+
 	log.Printf("DEBUG [Executor]: a preparar workspace. Tipo recebido: '%s'", config.Type)
 	log.Printf("DEBUG [Executor]: a comparar com: '%s'", domain.TypeTerraform)
 
 	switch config.Type {
 	case domain.TypeTerraform:
 		log.Printf("DEBUG [Executor]: 'if' deu VERDADEIRO. A escrever ficheiros Terraform...")
-		if err := os.WriteFile(filepath.Join(execDir, "main.tf"), []byte(config.Code), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(execDir, "main.tf"), []byte(cleanCode), 0644); err != nil {
 			return "", err
 		}
 		if err := os.WriteFile(filepath.Join(execDir, "provider.tf"), []byte(localstackProviderConfig), 0644); err != nil {
@@ -158,7 +161,7 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		}
 	case domain.TypeAnsible:
 		log.Printf("DEBUG [Executor]: A escrever ficheiros Ansible...")
-		if err := os.WriteFile(filepath.Join(execDir, "playbook.yml"), []byte(config.Code), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(execDir, "playbook.yml"), []byte(cleanCode), 0644); err != nil {
 			return "", err
 		}
 		if err := os.WriteFile(filepath.Join(execDir, "inventory.ini"), []byte(ansibleLocalInventory), 0644); err != nil {
@@ -166,7 +169,7 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		}
 	case domain.TypeLinux:
 		log.Printf("DEBUG [Executor]: A escrever ficheiros Linux ... ")
-		if err := os.WriteFile(filepath.Join(execDir, "run.sh"), []byte(config.Code), 0755); err != nil {
+		if err := os.WriteFile(filepath.Join(execDir, "run.sh"), []byte(cleanCode), 0755); err != nil {
 			return "", err
 		}
 	}
@@ -179,13 +182,12 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 	switch config.Type {
 	case domain.TypeTerraform:
 		image := "hashicorp/terraform:latest"
-		tfCommand := "terraform init && terraform apply -auto-approve"
-		
-		
+		tfCommand := "rm -rf .terraform/ && terraform init -upgrade && terraform apply -auto-approve"
 		
 		args := []string{
 			"run", "--rm",
 			"--network", e.dockerNetwork,
+			"-e", "TF_PLUGIN_CACHE_DIR=/tmp/plugins",
 			"-v", fmt.Sprintf("%s:/workspace", hostDir),
 			"--entrypoint", "sh",
 			"-w", "/workspace",
@@ -214,7 +216,7 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 	
 	case domain.TypeLinux:
 		image := "alpine:latest"
-		linuxCommand := "./run.sh"
+		linuxCommand := "sh run.sh"
 
 		args := []string {
 			"run", "--rm",

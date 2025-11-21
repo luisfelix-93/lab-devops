@@ -74,7 +74,8 @@ func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.L
 
 
 func (r *sqlRepository) GetWorkspaceByLabID(ctx context.Context, labID string) (*domain.Workspace, error) {
-	query := `SELECT id, lab_id, user_code, state, updated_at 
+	// CORREÇÃO: Adicionado 'status' no SELECT
+	query := `SELECT id, lab_id, user_code, state, updated_at, status 
 	          FROM workspaces WHERE lab_id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, labID)
@@ -86,7 +87,7 @@ func (r *sqlRepository) GetWorkspaceByLabID(ctx context.Context, labID string) (
 		&ws.UserCode,
 		&ws.State,
 		&ws.UpdatedAt,
-		&ws.Status,
+		&ws.Status, 
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -160,7 +161,6 @@ func (r *sqlRepository) UpdateWorkspaceCode(ctx context.Context, workspaceID str
 	_, err := r.db.ExecContext(ctx, query, code, workspaceID)
 	return err
 }
-
 func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*domain.Workspace, error) {
 	lab, err := r.GetLabByID(ctx, labID)
 	if err != nil {
@@ -178,7 +178,7 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 		return nil, err
 	}
 
-	selectQuery := `SELECT id, lab_id, user_code, state, updated_at FROM workspaces WHERE id = ?`
+	selectQuery := `SELECT id, lab_id, user_code, state, updated_at, status FROM workspaces WHERE id = ?`
 	row := r.db.QueryRowContext(ctx, selectQuery, newWorkspaceID)
 
 	var ws domain.Workspace
@@ -188,7 +188,7 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 		&ws.UserCode,
 		&ws.State,
 		&ws.UpdatedAt,
-		&ws.Status,
+		&ws.Status, 
 	); err != nil {
 		return nil, err
 	}
