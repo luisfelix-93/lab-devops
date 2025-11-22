@@ -17,7 +17,7 @@ jobs:
             - name: Gerar data no formato YYYYmmDD
               id: get_date
               run: |
-                date=$(date + "%Y%m%d")
+                date=$(date +"%Y%m%d")
                 echo "date=$date" >> $GITHUB_OUTPUT 
 
             - name: Login to Docker Hub
