@@ -50,6 +50,7 @@ localstack_data/
 # Build output
 build/
 dist/
+data/
 *.tf
 # OS generated files
 .terraform/

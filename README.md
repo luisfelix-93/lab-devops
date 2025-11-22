@@ -151,6 +151,48 @@ The `workspaces` table includes:
 - `state`: JSON representation of the workspace state
 
 This schema enables tracking of user progress and validation of lab submissions.
+
+## Recent Updates
+
+-   **Example**:
+    ```bash
+    curl http://localhost:8080/api/v1/labs/lab-tf-01
+    ```
+
+### Execute a Lab
+
+Initiates a WebSocket connection to execute lab code and receive real-time logs.
+
+-   **URL**: `/api/v1/labs/:labID/execute`
+-   **Protocol**: `WebSocket`
+-   **Client Message (to start execution)**:
+    ```json
+    {
+      "action": "execute",
+      "user_code": "resource \"aws_s3_bucket\" \"my_bucket\" { ... }"
+    }
+    ```
+-   **Server Messages**:
+    -   `{"type": "log", "payload": "..."}`: An execution log line.
+    -   `{"type": "error", "payload": "..."}`: An error message.
+    -   `{"type": "complete", "payload": "..."}`: Completion message.
+
+## Database
+
+The project uses **SQLite** as its database. The database file is created at `./data/lab.db`.
+
+Schema migrations are located in `db/migrations/`. The `001_init_schema.sql` file contains the initial structure for the `labs` and `workspaces` tables.
+
+### Database Schema
+
+The `workspaces` table includes:
+- `id`: Unique identifier for the workspace
+- `lab_id`: Reference to the associated lab
+- `user_id`: Reference to the user
+- `status`: Workspace completion status (`in_progress` or `complete`)
+- `state`: JSON representation of the workspace state
+
+This schema enables tracking of user progress and validation of lab submissions.
 # Lab DevOps API
 
 The **Lab DevOps API** is an interactive learning environment for practicing DevOps skills, such as Terraform and other IaC (Infrastructure as Code) tools. The platform allows users to execute "labs" in a simulated and secure environment, receiving real-time feedback.
@@ -198,7 +240,7 @@ The project follows a layered architecture for separation of concerns:
 
 ## Supported Lab Types
 
-The platform currently supports two types of labs:
+The platform currently supports those types of labs:
 
 ### Terraform Labs
 Execute Infrastructure as Code (IaC) using Terraform. Users can provision cloud resources in the simulated LocalStack environment.
@@ -209,6 +251,13 @@ Execute automation playbooks using Ansible. The system:
 - Generates an `inventory.ini` file for localhost configuration
 - Runs playbooks in isolation using the `cytopia/ansible:latest` Docker image
 - Enables communication with other services (e.g., LocalStack) on the Docker network
+
+### Kubernetes Labs
+Execute Kubernetes manifests in a lightweight K3s cluster. The system:
+- Provisions a K3s cluster in a Docker container
+- Exposes the cluster API securely
+- Automatically configures `kubeconfig` for the execution environment
+- Supports `kubectl` commands in an isolated environment
 
 ## How to Run the Project
 
@@ -311,6 +360,13 @@ This schema enables tracking of user progress and validation of lab submissions.
 - **Workspace Status Tracking**: Added the ability to track workspace completion status. After successful lab execution, the workspace is marked as `"complete"`.
 - **Enhanced State Management**: The `WorkspaceID` is now properly captured and used when saving the final state of a lab execution.
 - **Ansible Support**: Full support for executing Ansible playbooks with dynamic inventory configuration and Docker isolation.
+
+### November 22, 2025
+- **Kubernetes Support**: Added support for running Kubernetes labs using K3s.
+- **CI/CD Pipelines**: Implemented GitHub Actions for:
+    - Automatic Pull Request creation on branch push.
+    - Automated Docker build and push on PR merge.
+- **Stability Improvements**: Fixed bugs in the Docker executor and improved logging.
 
 ### November 20, 2025
 - **Learning Tracks**: Introduced structured learning paths (Tracks) to organize labs sequentially.

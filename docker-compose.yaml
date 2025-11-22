@@ -30,10 +30,28 @@ services:
     networks:
       - minha-rede-lab
 
+  k3s:
+    image: rancher/k3s:latest
+    command: server --disable=traefik --tls-san=k3s
+    tmpfs:
+      - /run
+      - /var/run
+    privileged: true
+    environment:
+      - K3S_KUBECONFIG_OUTPUT=/output/kubeconfig.yaml
+      - K3S_KUBECONFIG_MODE=666
+    volumes:
+      - k3s_data:/var/lib/rancher/k3s
+      - ./data/k3s:/output
+    ports:
+      - "6443:6443"
+    networks:
+      - minha-rede-lab
 networks:
   minha-rede-lab:
     name: minha-rede-lab
 
 volumes:
   localstack_data: {}
-  exec-data: {} 
+  exec-data: {}
+  k3s_data: {} 
