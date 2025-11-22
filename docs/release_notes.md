@@ -1,26 +1,19 @@
-# 🚀 Release Notes - Lab DevOps v3.0
+# Notas de Lançamento
 
-Estamos empolgados em anunciar a nova versão da plataforma **Lab DevOps**! Esta atualização traz uma nova forma de organizar seus estudos e melhorias significativas de performance.
+## [v3.0.0] - 2025-11-22
 
-## ✨ Novidades
+### 🚀 Novas Funcionalidades
+- **Suporte a Kubernetes**: Adicionado suporte completo para execução de laboratórios Kubernetes usando um cluster K3s local.
+  - Integrado serviço `rancher/k3s` no Docker Compose.
+  - Gerenciamento automático do `kubeconfig` para execução isolada.
+  - Suporte para comandos `kubectl` nos laboratórios.
+- **Pipelines de CI/CD**:
+  - **Auto-PR**: Criação automática de Pull Requests para branches de feature usando GitHub Actions.
+  - **Build Docker**: Build e push automatizados de imagens Docker para o Docker Hub ao realizar merge na `main`.
 
-### 📚 Trilhas de Aprendizado (Learning Tracks)
-Agora você não precisa mais adivinhar qual lab fazer em seguida. Com as **Trilhas de Aprendizado**, organizamos os laboratórios em caminhos estruturados e sequenciais.
-- **Guiado**: Siga um caminho lógico do básico ao avançado.
-- **Organizado**: Visualize seu progresso dentro de cada trilha.
+### 🐛 Correções de Bugs
+- Corrigido um erro de digitação crítico (`filePath` -> `filepath`) em `docker_executor.go` que impedia a execução correta de laboratórios Kubernetes.
 
-### ✅ Acompanhamento de Progresso
-Melhoramos a forma como o sistema registra suas conquistas.
-- **Status de Conclusão**: Ao terminar um lab com sucesso, ele será marcado automaticamente como "Concluído".
-- **Validação**: Tenha certeza de que seu exercício foi executado e validado corretamente.
-
-## ⚡ Performance
-
-### Inicialização Mais Rápida
-Otimizamos nosso motor de execução (baseado em Docker). Isso significa:
-- **Menos espera**: O ambiente dos laboratórios carrega muito mais rápido.
-- **Mais fluidez**: Uma experiência de uso mais ágil e responsiva.
-
----
-
-*Obrigado por usar o Lab DevOps! Continue praticando e evoluindo.*
+### 🛠 Melhorias
+- Adicionado diretório `data/` ao `.gitignore` para evitar o commit de arquivos temporários de execução e dados do K3s.
+- Melhoria nos logs do executor Docker para distinguir melhor entre os tipos de execução Linux e Docker.
