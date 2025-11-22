@@ -11,8 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"strings"
+	"sync"
 )
 
 const localstackProviderConfig = `
@@ -103,7 +103,7 @@ func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionCon
 		go e.streamPipe(stderrPipe, logStream, &wg)
 
 		log.Printf("INFO [Executor]: Iniciando execução para %s...", config.WorkspaceID)
-if err := cmd.Start(); err != nil {
+		if err := cmd.Start(); err != nil {
 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao iniciar comando: %w", err)}
 			return
 		}
@@ -142,7 +142,7 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		return "", err
 	}
 
-	cleanCode := strings.ReplaceAll(config.Code, "\r\n", "\n");
+	cleanCode := strings.ReplaceAll(config.Code, "\r\n", "\n")
 
 	log.Printf("DEBUG [Executor]: a preparar workspace. Tipo recebido: '%s'", config.Type)
 	log.Printf("DEBUG [Executor]: a comparar com: '%s'", domain.TypeTerraform)
@@ -167,9 +167,29 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		if err := os.WriteFile(filepath.Join(execDir, "inventory.ini"), []byte(ansibleLocalInventory), 0644); err != nil {
 			return "", err
 		}
-	case domain.TypeLinux:
-		log.Printf("DEBUG [Executor]: A escrever ficheiros Linux ... ")
+	case domain.TypeLinux, domain.TypeDocker:
+		log.Printf("DEBUG [Executor]: A escrever ficheiros Linux | Docker ... ")
 		if err := os.WriteFile(filepath.Join(execDir, "run.sh"), []byte(cleanCode), 0755); err != nil {
+			return "", err
+		}
+	case domain.TypeK8s:
+		log.Printf("DEBUG [Executor]: A preparar ambiente Kubernetes...")
+
+		if err := os.WriteFile(filepath.Join(execDir, "run.sh"), []byte(cleanCode), 0755); err != nil {
+			return "", err
+		}
+
+		k3sConfifPath := "/app/data/k3s/kubeconfig.yaml"
+		content, err := os.ReadFile(k3sConfifPath)
+		if err != nil {
+			return "", fmt.Errorf("falha ao ler kubeconfig do K3s (o cluster está de pé?): %w", err)
+		}
+
+		kcStr := string(content)
+		kcStr = strings.Replace(kcStr, "127.0.0.1", "k3s", -1)
+		kcStr = strings.Replace(kcStr, "localhost", "k3s", -1)
+
+		if err := os.WriteFile(filepath.Join(execDir, "kubeconfig.yaml"), []byte(kcStr), 0644); err != nil {
 			return "", err
 		}
 	}
@@ -183,7 +203,7 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 	case domain.TypeTerraform:
 		image := "hashicorp/terraform:latest"
 		tfCommand := "rm -rf .terraform/ && terraform init -upgrade && terraform apply -auto-approve"
-		
+
 		args := []string{
 			"run", "--rm",
 			"--network", e.dockerNetwork,
@@ -204,21 +224,21 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 			"run", "--rm",
 			// Adicionamos a rede para que o Ansible possa, por exemplo,
 			// contactar o 'simulador-iac' (LocalStack) se necessário.
-			"--network", e.dockerNetwork, 
+			"--network", e.dockerNetwork,
 			"-v", fmt.Sprintf("%s:/workspace", hostDir),
 			"--entrypoint", "sh",
 			"-w", "/workspace",
 			image,
 			"-c", ansibleCommand,
 		}
-		
+
 		return exec.CommandContext(ctx, "docker", args...), nil
-	
+
 	case domain.TypeLinux:
 		image := "alpine:latest"
 		linuxCommand := "sh run.sh"
 
-		args := []string {
+		args := []string{
 			"run", "--rm",
 			"--network", e.dockerNetwork,
 			"-v", fmt.Sprintf("%s:/workspace", hostDir),
@@ -227,10 +247,43 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 			image,
 			"-c", linuxCommand,
 		}
-		
+
+		return exec.CommandContext(ctx, "docker", args...), nil
+
+	case domain.TypeDocker:
+		image := "docker:cli"
+		dockerCommand := "sh run.sh"
+
+		args := []string{
+			"run", "--rm",
+			"--network", e.dockerNetwork,
+			"-v", fmt.Sprintf("%s:/workspace", hostDir),
+			"-v", "/var/run/docker.sock:/var/run/docker.sock",
+			"--entrypoint", "sh",
+			"-w", "/workspace",
+			image,
+			"-c", dockerCommand,
+		}
+
+		return exec.CommandContext(ctx, "docker", args...), nil
+
+	case domain.TypeK8s:
+		image := "bitnami/kubectl:latest"
+		k8sCommand := "sh run.sh"
+
+		args := []string{
+			"run", "--rm",
+			"--network", e.dockerNetwork,
+			"-v", fmt.Sprintf("%s:/workspace", hostDir),
+			"-e", "KUBECONFIG=/workspace/kubeconfig.yaml",
+			"--entrypoint", "sh",
+			"-w", "/workspace",
+			image,
+			"-c", k8sCommand,
+		}
 		return exec.CommandContext(ctx, "docker", args...), nil
 	}
-	
+
 	return nil, fmt.Errorf("tipo de execução desconhecido: %s", config.Type)
 }
 
