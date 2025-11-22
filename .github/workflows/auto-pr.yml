@@ -39,4 +39,4 @@ jobs:
             --base main \
             --head ${{ github.ref_name }} \
             --title "Auto PR: ${{ steps.get_date.outputs.date }}" \
-            --body-file docs/PR_SUMMARY.md
+            --body-file docs/PR_Summary.md
