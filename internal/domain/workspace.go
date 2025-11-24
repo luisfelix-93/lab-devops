@@ -2,6 +2,11 @@ package domain
 
 import "time"
 
+const (
+	WorkspaceStatusInProgress = "in_progress"
+	WorkspaceStatusCompleted  = "completed"
+)
+
 type Workspace struct {
 	ID        string 	`json:"id"`
 	LabID     string 	`json:"lab_id"`

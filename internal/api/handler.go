@@ -4,6 +4,7 @@ import (
 	"lab-devops/internal/service"
 	"log"
 	"net/http"
+	"lab-devops/internal/domain"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -44,13 +45,13 @@ type CreateLabRequest struct {
     InitialCode  string `json:"initial_code"`
 	TrackID      string `json:"track_id"`
     LabOrder     int    `json:"lab_order"`
+	ValidationCode string `json:"validation_code"`
 }
 
 type CreateTrackRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 }
-
 func (h *Handler) HandlerLabExecute(c echo.Context) error {
 	labID := c.Param("labID")
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
@@ -68,89 +69,111 @@ func (h *Handler) HandlerLabExecute(c echo.Context) error {
 		return err
 	}
 
-	if msg.Action != "execute" {
+	ctx := c.Request().Context()
+	
+    // Variáveis para capturar o retorno do serviço
+    var logStream <-chan service.ExecutionResult
+	var finalState <-chan service.ExecutionFinalState
+	var wsID string
+	var errExec error
+	var isValidation bool
+
+	// Lógica de Decisão: Executar ou Validar?
+	if msg.Action == "execute" {
+		log.Printf("INFO [Handler]: Executando comando do usuário (Lab %s)", labID)
+		isValidation = false
+        // Chama ExecuteLab (retorna 4 valores)
+		logStream, finalState, wsID, errExec = h.labService.ExecuteLab(ctx, labID, msg.UserCode)
+
+	} else if msg.Action == "validate" {
+		log.Printf("INFO [Handler]: Validando solução (Lab %s)", labID)
+		isValidation = true
+        // Chama ValidateLab (retorna 4 valores)
+		logStream, finalState, wsID, errExec = h.labService.ValidateLab(ctx, labID)
+
+	} else {
 		log.Printf("AVISO [Handler]: Ação desconhecida: %s", msg.Action)
 		return nil
 	}
 
-	log.Printf("INFO [Handler]: Recebido comando 'execute' para Lab %s", labID)
-
-	ctx := c.Request().Context() // Obtém o contexto da requisição
-	logStream, finalState, err := h.labService.ExecuteLab(ctx, labID, msg.UserCode)
-	if err != nil {
-		log.Printf("ERRO [Handler]: Falha ao chamar ExecuteLab: %v", err)
-		ws.WriteJSON(ServerMessage{Type: "error", Payload: err.Error()})
-		return err
+	if errExec != nil {
+		log.Printf("ERRO [Handler]: Falha ao iniciar execução: %v", errExec)
+		ws.WriteJSON(ServerMessage{Type: "error", Payload: errExec.Error()})
+		return errExec
 	}
 
+	// Loop de Streaming (Goroutine para não bloquear o WS)
 	go func() {
 		for {
 			select {
-			// Caso A: Chegou uma nova linha de log
+			// Caso A: Nova linha de log do executor
 			case logLine, ok := <-logStream:
 				if !ok {
-					// Canal de log foi fechado, mas finalState ainda pode vir
-					logStream = nil // Evita selecionar este case novamente
+					logStream = nil // Canal fechado
 					continue
 				}
-				// Envia o log para o cliente
 				if err := ws.WriteJSON(ServerMessage{Type: "log", Payload: logLine.Line}); err != nil {
 					log.Printf("AVISO [Handler]: Erro ao escrever log no ws: %v", err)
 					return
 				}
 
-			// Caso B: A execução terminou (com sucesso ou erro)
+			// Caso B: A execução terminou (Estado Final)
 			case state, ok := <-finalState:
 				if !ok {
-					// Canal final fechado, terminamos
 					return
 				}
 				
-				// Se a execução falhou, envia o erro
+				// Se houve erro na execução (Exit Code != 0)
 				if state.Error != nil {
 					log.Printf("INFO [Handler]: Execução falhou: %v", state.Error)
 					ws.WriteJSON(ServerMessage{Type: "error", Payload: state.Error.Error()})
-					// Não salvamos o estado se deu erro
-					return
-				}
-				//Sucesso! (Exit Code 0)
-				// Se a execução foi bem-sucedida, salva o novo estado
-				log.Printf("INFO [Handler]: Execução concluída, salvando estado para Workspace %s...", state.WorkspaceID)
-				if err := h.labService.SaveWorkspaceState(ctx, state.WorkspaceID, state.NewState); err != nil {
-					log.Printf("ERRO [Handler]: Falha ao salvar estado do workspace: %v", err)
-					// Mesmo que salvar o estado falhe, a execução em si foi um sucesso.
-					// Poderíamos decidir enviar um erro aqui, mas por enquanto vamos notificar o sucesso.
-					ws.WriteJSON(ServerMessage{Type: "error", Payload: "Falha ao salvar o estado final da execução."})
+					
+					// Feedback específico se for validação
+					if isValidation {
+						ws.WriteJSON(ServerMessage{Type: "log", Payload: "❌ A validação falhou. Verifique a sua solução e tente novamente."})
+					}
 					return
 				}
 
-				if err := h.labService.SaveWorkspaceStatus(ctx, state.WorkspaceID, "complete"); err != nil {
-					log.Printf("ERRO [Handler]: Falha ao salvar status do workspace: %v", err)
-					return
+				// SUCESSO (Exit Code 0)
+				log.Printf("INFO [Handler]: Execução concluída com sucesso.")
+				
+				if isValidation {
+					// Se foi Validação e passou -> Marca como COMPLETED
+					log.Printf("INFO [Handler]: Lab validado! Salvando status completed.")
+					if err := h.labService.SaveWorkspaceStatus(ctx, wsID, domain.WorkspaceStatusCompleted); err != nil {
+                        log.Printf("ERRO [Handler]: Falha ao salvar status: %v", err)
+                    }
+					ws.WriteJSON(ServerMessage{Type: "complete", Payload: "✅ Parabéns! Laboratório concluído com sucesso."})
+				} else {
+					// Se foi apenas Execute -> Apenas avisa que terminou
+					ws.WriteJSON(ServerMessage{Type: "complete", Payload: "Comando executado."})
 				}
 				
-				ws.WriteJSON(ServerMessage{Type: "complete", Payload: "Execução concluída com sucesso!"})
-				return // Termina a goroutine
+				// Salva o estado do Terraform (se houver)
+				if state.NewState != nil {
+					h.labService.SaveWorkspaceState(ctx, wsID, state.NewState)
+				}
+				return // Fim da execução
 
-			// Caso C: O contexto do request foi cancelado
+			// Caso C: Cancelamento do contexto HTTP
 			case <-ctx.Done():
-				log.Printf("AVISO [Handler]: Contexto cancelado, fechando stream.")
+				log.Printf("AVISO [Handler]: Contexto cancelado.")
 				return
 			}
 		}
 	}()
 
+	// Manter a conexão WebSocket viva até o cliente desconectar
 	for {
 		if _, _, err := ws.ReadMessage(); err != nil {
 			log.Printf("INFO [Handler]: Cliente desconectado: %v", err)
-			break // Sai do loop e encerra a função
+			break
 		}
 	}
 
 	return nil
-
 }
-
 func (h *Handler) HandleGetLabDetails(c echo.Context) error {
 	labID := c.Param("labID")
 	
@@ -181,19 +204,22 @@ func (h *Handler) HandleListLabs(c echo.Context) error {
 }
 
 func (h *Handler) HandleCreateLab(c echo.Context) error {
-	var req CreateLabRequest // Usa a nova struct
+	var req CreateLabRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Payload inválido"})
 	}
 
-	lab, err := h.labService.CreateLab(c.Request().Context(), req.Title, req.Type, req.Instructions, req.InitialCode, req.TrackID, req.LabOrder)
+	lab, err := h.labService.CreateLab(
+        c.Request().Context(), 
+        req.Title, req.Type, req.Instructions, req.InitialCode,
+        req.TrackID, req.LabOrder, req.ValidationCode,
+    )
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
 	return c.JSON(http.StatusCreated, lab)
 }
-
 func (h * Handler) HandlerDeleteLab(c echo.Context) error {
 	labId := c.Param("labId")
 	err := h.labService.CleanLab(c.Request().Context(), labId)
