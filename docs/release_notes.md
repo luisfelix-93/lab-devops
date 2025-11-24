@@ -1,19 +1,23 @@
-# Notas de Lançamento
+# Release Notes - Validação Automática de Labs
 
-## [v3.0.0] - 2025-11-22
+## Novidades
 
-### 🚀 Novas Funcionalidades
-- **Suporte a Kubernetes**: Adicionado suporte completo para execução de laboratórios Kubernetes usando um cluster K3s local.
-  - Integrado serviço `rancher/k3s` no Docker Compose.
-  - Gerenciamento automático do `kubeconfig` para execução isolada.
-  - Suporte para comandos `kubectl` nos laboratórios.
-- **Pipelines de CI/CD**:
-  - **Auto-PR**: Criação automática de Pull Requests para branches de feature usando GitHub Actions.
-  - **Build Docker**: Build e push automatizados de imagens Docker para o Docker Hub ao realizar merge na `main`.
+### ✨ Validação Automática de Código
+Agora, a plataforma Lab DevOps conta com um sistema inteligente de validação de desafios!
+- **Feedback Instantâneo**: Ao submeter sua solução, o sistema verifica automaticamente se o objetivo do laboratório foi alcançado.
+- **Correção Precisa**: Cada lab possui critérios específicos de sucesso (ex: verificar se um Pod Kubernetes está rodando ou se um bucket S3 foi criado).
+- **Acompanhamento de Progresso**: Seus laboratórios só serão marcados como "Concluídos" após passarem na validação automática.
 
-### 🐛 Correções de Bugs
-- Corrigido um erro de digitação crítico (`filePath` -> `filepath`) em `docker_executor.go` que impedia a execução correta de laboratórios Kubernetes.
+### 🚀 Novos Desafios
+- **Labs Kubernetes (CKA)**: Adicionamos suporte a laboratórios preparatórios para a certificação CKA, com validação automática de recursos.
 
-### 🛠 Melhorias
-- Adicionado diretório `data/` ao `.gitignore` para evitar o commit de arquivos temporários de execução e dados do K3s.
-- Melhoria nos logs do executor Docker para distinguir melhor entre os tipos de execução Linux e Docker.
+---
+
+## Melhorias Técnicas
+
+- **API WebSocket**: O endpoint de execução agora suporta o modo de validação (`action: "validate"`), permitindo separar a execução de testes da execução livre.
+- **Banco de Dados**: Otimizações na estrutura de dados para suportar scripts de validação personalizados por laboratório.
+
+---
+
+*Aproveite as novidades e bons estudos!*

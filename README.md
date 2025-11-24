@@ -137,6 +137,12 @@ Initiates a WebSocket connection to execute lab code and receive real-time logs.
       "user_code": "resource \"aws_s3_bucket\" \"my_bucket\" { ... }"
     }
     ```
+-   **Client Message (to validate solution)**:
+    ```json
+    {
+      "action": "validate"
+    }
+    ```
 -   **Server Messages**:
     -   `{"type": "log", "payload": "..."}`: An execution log line.
     -   `{"type": "error", "payload": "..."}`: An error message.
@@ -176,6 +182,12 @@ This schema enables tracking of user progress and validation of lab submissions.
 ### November 20, 2025
 - **Learning Tracks**: Introduced structured learning paths (Tracks) to organize labs sequentially.
 - **Performance**: Optimized Docker builds using BuildKit cache mounts for faster iteration.
+
+### November 24, 2025
+- **Code Validation**: Introduced automated code validation for labs.
+    - New `validate` action in WebSocket API.
+    - Labs now have a `validation_code` field to verify user solutions.
+    - Immediate feedback on success/failure of challenges.
 
 
 ## How to Contribute
