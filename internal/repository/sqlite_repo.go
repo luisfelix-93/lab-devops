@@ -47,7 +47,7 @@ func NewSQLiteRepository(dbPath string, migrationScriptPath string) (service.Wor
 }
 func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.Lab, error) {
 	query := `SELECT id, title, type, instructions, initial_code, created_at, 
-	                 track_id, lab_order
+	                 track_id, lab_order, COALESCE(validation_code, '')
 	          FROM labs WHERE id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, labID)
@@ -61,7 +61,8 @@ func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.L
 		&lab.InitialCode,
 		&lab.CreatedAt,
 		&lab.TrackID,  
-		&lab.LabOrder, 
+		&lab.LabOrder,
+		&lab.ValidationCode,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -123,14 +124,13 @@ func (r *sqlRepository) GetWorkspaceState(ctx context.Context, workspaceID strin
 
 func (r *sqlRepository) ListLabs(ctx context.Context) ([]*domain.Lab, error) {
 	query := `SELECT id, title, type, instructions, initial_code, created_at,
-	                 track_id, lab_order
+	                 track_id, lab_order, COALESCE(validation_code, '')
 	          FROM labs ORDER BY lab_order ASC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var labs []*domain.Lab
 	for rows.Next() {
 		var lab domain.Lab
@@ -143,6 +143,7 @@ func (r *sqlRepository) ListLabs(ctx context.Context) ([]*domain.Lab, error) {
 			&lab.CreatedAt,
 			&lab.TrackID,  // Novo
 			&lab.LabOrder, // Novo
+			&lab.ValidationCode,	
 		); err != nil {
 			return nil, err
 		}
@@ -208,6 +209,7 @@ func (r *sqlRepository) CreateLab(ctx context.Context, lab *domain.Lab) error {
         lab.InitialCode,
 		lab.TrackID,
 		lab.LabOrder,
+		lab.ValidationCode,
     )
     return err
 }
@@ -260,7 +262,7 @@ func (r *sqlRepository) ListTracks(ctx context.Context) ([]*domain.Track, error)
 
 func (r *sqlRepository) ListLabsByTrackID(ctx context.Context, trackID string) ([]*domain.Lab, error) {
 	query := `SELECT id, title, type, instructions, initial_code, created_at,
-	                 track_id, lab_order
+	                 track_id, lab_order, COALESCE(validation_code, '')
 	          FROM labs WHERE track_id = ? ORDER BY lab_order ASC`
 	rows, err := r.db.QueryContext(ctx, query, trackID)
 	if err != nil {
@@ -280,6 +282,7 @@ func (r *sqlRepository) ListLabsByTrackID(ctx context.Context, trackID string) (
 			&lab.CreatedAt,
 			&lab.TrackID,
 			&lab.LabOrder,
+			&lab.ValidationCode,
 		); err != nil {
 			return nil, err
 		}
