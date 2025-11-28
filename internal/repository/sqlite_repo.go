@@ -199,8 +199,8 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 
 func (r *sqlRepository) CreateLab(ctx context.Context, lab *domain.Lab) error {
     query := `
-        INSERT INTO labs (id, title, type, instructions, initial_code, track_id, lab_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`
+        INSERT INTO labs (id, title, type, instructions, initial_code, track_id, lab_order, validation_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     _, err := r.db.ExecContext(ctx, query, 
         lab.ID, 
         lab.Title, 
