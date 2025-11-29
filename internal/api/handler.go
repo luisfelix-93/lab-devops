@@ -252,3 +252,55 @@ func (h *Handler) HandleListTracks(c echo.Context) error {
     
     return c.JSON(http.StatusOK, tracks)
 }
+
+func (h *Handler) HandleUpdateLab(c echo.Context) error {
+	var req CreateLabRequest
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Payload inválido"})
+	}
+
+	labId := c.Param("labId")
+	lab, err := h.labService.UpdateLab(c.Request().Context(), labId, req.Title, req.Type, req.Instructions, req.InitialCode, req.TrackID, req.LabOrder, req.ValidationCode)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, lab)
+}
+
+func (h *Handler) HandleUpdateTrack(c echo.Context) error {
+	var req CreateTrackRequest
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Payload inválido"})
+	}
+
+	trackId := c.Param("trackId")
+	track, err := h.labService.UpdateTrack(c.Request().Context(), trackId, req.Title, req.Description)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, track)
+}
+
+func (h *Handler) HandleDeleteLab(c echo.Context) error {
+	labId := c.Param("labId")
+	err := h.labService.DeleteLab(c.Request().Context(), labId)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Lab deletado com sucesso"})
+}
+
+func (h *Handler) HandleDeleteTrack(c echo.Context) error {
+	trackId := c.Param("trackId")
+	err := h.labService.DeleteTrack(c.Request().Context(), trackId)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "Track deletado com sucesso"})
+}

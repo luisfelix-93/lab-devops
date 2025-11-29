@@ -218,3 +218,78 @@ func (s *LabService) ListTracks(ctx context.Context) ([]*domain.Track, error) {
 
 	return tracks, nil
 }
+
+func (s *LabService) UpdateLab(ctx context.Context, id, title, labType, instructions, initialCode, trackID string, labOrder int, validationCode string) (*domain.Lab, error) {
+	existingLab, err := s.repo.GetLabByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existingLab == nil {
+		return nil, fmt.Errorf("lab com ID %s não encontrado", id)
+	}
+
+	if title != "" {
+		existingLab.Title = title
+	}
+	if labType != "" {
+		existingLab.Type = labType
+	}
+	if instructions != "" {
+		existingLab.Instructions = instructions
+	}
+	if initialCode != "" {
+		existingLab.InitialCode = initialCode
+	}
+	if validationCode != "" {
+		existingLab.ValidationCode = validationCode
+	}
+	if trackID != "" {
+		existingLab.TrackID = trackID
+	}
+	if labOrder != 0 {
+		existingLab.LabOrder = labOrder
+	}
+
+	if err := s.repo.UpdateLab(ctx, existingLab); err != nil {
+		return nil, err
+	}
+
+	return existingLab, nil
+}
+
+func (s *LabService) UpdateTrack(ctx context.Context, id, title, description string) (*domain.Track, error) {
+	existingTrack, err := s.repo.GetTrackByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existingTrack == nil {
+		return nil, fmt.Errorf("trilha com ID %s não encontrada", id)
+	}
+
+	if title != "" {
+		existingTrack.Title = title
+	}
+	if description != "" {
+		existingTrack.Description = description
+	}
+
+	if err := s.repo.UpdateTrack(ctx, existingTrack); err != nil {
+		return nil, err
+	}
+
+	return existingTrack, nil
+}
+
+func (s *LabService) DeleteLab(ctx context.Context, id string) error {
+	if err := s.repo.DeleteLab(ctx, id); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *LabService) DeleteTrack(ctx context.Context, id string) error {
+	if err := s.repo.DeleteTrack(ctx, id); err != nil {
+		return err
+	}
+	return nil
+}

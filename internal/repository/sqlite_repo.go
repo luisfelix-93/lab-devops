@@ -296,6 +296,21 @@ func (r *sqlRepository) ListLabsByTrackID(ctx context.Context, trackID string) (
 	return labs, nil
 }
 
+func (r *sqlRepository) GetTrackByID(ctx context.Context, id string) (*domain.Track, error) {
+	query := `SELECT id, title, description, created_at FROM tracks WHERE id = ?`
+	row := r.db.QueryRowContext(ctx, query, id)
+	var track domain.Track
+	if err := row.Scan(
+		&track.ID,
+		&track.Title,
+		&track.Description,
+		&track.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return &track, nil
+}
+
 func (r *sqlRepository) CreateTrack(ctx context.Context, track *domain.Track) error {
 	query := `
 	INSERT INTO tracks (id, title, description)
@@ -307,5 +322,46 @@ func (r *sqlRepository) CreateTrack(ctx context.Context, track *domain.Track) er
 		track.Description,	
 	)
 
+	return err
+}
+
+func (r *sqlRepository) UpdateLab(ctx context.Context, lab *domain.Lab) error {
+	query := `
+		UPDATE labs SET title = ?, type = ?, instructions = ?, initial_code = ?, track_id = ?, lab_order = ?, validation_code = ? WHERE id = ?
+	`
+	_, err := r.db.ExecContext(ctx, query, 
+		lab.Title,
+		lab.Type,
+		lab.Instructions,
+		lab.InitialCode,
+		lab.TrackID,
+		lab.LabOrder,
+		lab.ValidationCode,
+		lab.ID,
+	)
+	return err
+}
+
+func (r* sqlRepository) DeleteLab(ctx context.Context, labID string) error {
+	query := `DELETE FROM labs WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, labID)
+	return err
+}
+
+func (r *sqlRepository) UpdateTrack(ctx context.Context, track *domain.Track) error {
+	query := `
+		UPDATE tracks SET title = ?, description = ? WHERE id = ?
+	`
+	_, err := r.db.ExecContext(ctx, query, 
+		track.Title,
+		track.Description,
+		track.ID,	
+	)
+	return err
+}
+
+func (r *sqlRepository) DeleteTrack(ctx context.Context, trackID string) error {
+	query := `DELETE FROM tracks WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, trackID)
 	return err
 }
