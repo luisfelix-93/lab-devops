@@ -22,13 +22,16 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=ec2,s3,lambda,sqs
+      - SERVICES=ec2,s3,lambda,sqs,route53,s3control,sts
       - DEBUG=1
     volumes:
       - localstack_data:/var/lib/localstack
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
-      - minha-rede-lab
+      minha-rede-lab:
+        aliases:
+          - simulador-iac
+          - 000000000000.simulador-iac
 
   k3s:
     image: rancher/k3s:latest

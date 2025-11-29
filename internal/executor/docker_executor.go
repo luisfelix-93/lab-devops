@@ -15,21 +15,26 @@ import (
 	"sync"
 )
 
-const localstackProviderConfig = `
+const defaultLocalstackProviderConfig = `
 provider "aws" {
-	region  					= "us-east-1"
-	access_key 					= "dummy"
-	secret_key 					= "dummy"
+	region                      = "us-east-1"
+	access_key                  = "test"
+	secret_key                  = "test"
+	
 	skip_credentials_validation = true
-	skip_metadata_api_check 	= true
-	skip_requesting_account_id 	= true
-	s3_use_path_style = true
+	skip_metadata_api_check     = true
+	skip_region_validation      = true 
+	s3_use_path_style           = true
 
 	endpoints {
-		s3 		= "http://simulador-iac:4566"
-		ec2 	= "http://simulador-iac:4566"
-		lambda 	= "http://simulador-iac:4566"
-		sqs 	= "http://simulador-iac:4566"
+		s3        = "http://simulador-iac:4566"
+		s3control = "http://simulador-iac:4566"
+		ec2       = "http://simulador-iac:4566"
+		lambda    = "http://simulador-iac:4566"
+		sqs       = "http://simulador-iac:4566"
+		iam       = "http://simulador-iac:4566"
+		sts       = "http://simulador-iac:4566" # Importante para evitar erros de validação
+		route53   = "http://simulador-iac:4566"
 	}
 }
 `
@@ -61,6 +66,19 @@ func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Execut
 	}, nil
 
 }
+
+// Helper: Tenta ler provider.f da pasta data, senão usa o default
+func (e *dockerExecutor) getTerraformProvider() []byte {
+	configDir := filepath.Join(e.tempDirRoot, "data")
+	configPath := filepath.Join(configDir, "terraform-provider.tf")
+
+	content, err := os.ReadFile(configPath)
+	if err == nil && len(content) > 0 {
+		return content
+	}
+	return []byte(defaultLocalstackProviderConfig)
+}
+
 func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionConfig) (<-chan service.ExecutionResult, <-chan service.ExecutionFinalState, error) {
 	logStream := make(chan service.ExecutionResult)
 	finalState := make(chan service.ExecutionFinalState)
@@ -153,10 +171,11 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		if err := os.WriteFile(filepath.Join(execDir, "main.tf"), []byte(cleanCode), 0644); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(filepath.Join(execDir, "provider.tf"), []byte(localstackProviderConfig), 0644); err != nil {
+		providerConfig := e.getTerraformProvider()
+		if err := os.WriteFile(filepath.Join(execDir, "provider.tf"), providerConfig, 0644); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(filepath.Join(execDir, "terraform.tfState"), config.State, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(execDir, "terraform.tfstate"), config.State, 0644); err != nil {
 			return "", err
 		}
 	case domain.TypeAnsible:
@@ -202,7 +221,7 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 	switch config.Type {
 	case domain.TypeTerraform:
 		image := "hashicorp/terraform:latest"
-		tfCommand := "rm -rf .terraform/ && terraform init -upgrade && terraform apply -auto-approve"
+		tfCommand := "mkdir -p /tmp/plugins && rm -rf .terraform/ && terraform init -upgrade && terraform apply -auto-approve"
 
 		args := []string{
 			"run", "--rm",
