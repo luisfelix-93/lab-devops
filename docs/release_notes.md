@@ -1,19 +1,21 @@
-# Notas de Lançamento
+# Release Notes - 29 de Novembro de 2025
 
-## [v3.0.0] - 2025-11-22
+Estamos felizes em anunciar uma nova atualização para a plataforma **Lab DevOps API**. Esta versão traz melhorias significativas na gestão de conteúdo e estabilidade do sistema.
 
-### 🚀 Novas Funcionalidades
-- **Suporte a Kubernetes**: Adicionado suporte completo para execução de laboratórios Kubernetes usando um cluster K3s local.
-  - Integrado serviço `rancher/k3s` no Docker Compose.
-  - Gerenciamento automático do `kubeconfig` para execução isolada.
-  - Suporte para comandos `kubectl` nos laboratórios.
-- **Pipelines de CI/CD**:
-  - **Auto-PR**: Criação automática de Pull Requests para branches de feature usando GitHub Actions.
-  - **Build Docker**: Build e push automatizados de imagens Docker para o Docker Hub ao realizar merge na `main`.
+## 🚀 Novidades
 
-### 🐛 Correções de Bugs
-- Corrigido um erro de digitação crítico (`filePath` -> `filepath`) em `docker_executor.go` que impedia a execução correta de laboratórios Kubernetes.
+### Gestão Completa de Trilhas e Labs
+Agora você tem controle total sobre o conteúdo da plataforma!
+- **Atualização de Trilhas e Labs**: Corrija erros de digitação, atualize instruções ou modifique configurações de laboratórios e trilhas existentes diretamente pela API.
+- **Remoção de Conteúdo**: Exclua laboratórios ou trilhas obsoletas para manter o catálogo de aprendizado sempre organizado.
 
-### 🛠 Melhorias
-- Adicionado diretório `data/` ao `.gitignore` para evitar o commit de arquivos temporários de execução e dados do K3s.
-- Melhoria nos logs do executor Docker para distinguir melhor entre os tipos de execução Linux e Docker.
+### Melhorias na Execução de Labs
+- **Maior Confiabilidade**: Fizemos ajustes importantes no motor de execução (Docker) para garantir que seus laboratórios rodem de forma mais fluida e sem interrupções inesperadas.
+- **Feedback Mais Preciso**: O sistema de logs e validação foi aprimorado para fornecer retornos mais claros durante a execução dos exercícios.
+
+### Infraestrutura
+- **Otimizações de Rede**: Melhorias na comunicação interna entre os serviços (API e LocalStack) para reduzir latência e erros de conexão.
+- **Setup Inicial**: O processo de inicialização do banco de dados e ambiente foi refinado para facilitar novas instalações.
+
+---
+*Obrigado por usar a Lab DevOps API!*

@@ -24,43 +24,72 @@ func NewLabService(repo WorkspaceRepository, executor Executor) *LabService {
 func (s *LabService) ExecuteLab(
 	ctx context.Context,
 	labID string,
-	code  string,
-) (<-chan ExecutionResult, <-chan ExecutionFinalState, error) {
+	code string,
+) (<-chan ExecutionResult, <-chan ExecutionFinalState, string, error) {
 	lab, err := s.repo.GetLabByID(ctx, labID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("falha ao buscar workspace para o lab %s: %w", labID, err)
+		return nil, nil, "", fmt.Errorf("falha ao buscar workspace para o lab %s: %w", labID, err)
 	}
 
 	if lab == nil {
-		return nil, nil, fmt.Errorf("lab com ID %s não encontrado", labID)
+		return nil, nil, "", fmt.Errorf("lab com ID %s não encontrado", labID)
 	}
 
 	ws, err := s.repo.GetWorkspaceByLabID(ctx, labID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("falha ao buscar workspace para o lab %s: %w", labID, err)
+		return nil, nil, "", fmt.Errorf("falha ao buscar workspace para o lab %s: %w", labID, err)
 	}
 	if ws == nil {
-		return nil, nil, fmt.Errorf("workspace para o lab %s não encontrado", labID)
+		return nil, nil, "", fmt.Errorf("workspace para o lab %s não encontrado", labID)
 	}
 
 	err = s.repo.UpdateWorkspaceCode(ctx, ws.ID, code)
 	if err != nil {
-		return nil, nil, fmt.Errorf("falha ao atualizar workspace para o lab %s: %w", labID, err)
+		return nil, nil, "", fmt.Errorf("falha ao atualizar workspace para o lab %s: %w", labID, err)
 	}
 
 	execConfig := domain.ExecutionConfig{
 		WorkspaceID: ws.ID,
 		Code:        code,
 		State:       ws.State,
-		Type:		 domain.ExecutionType(lab.Type),
-	}
-	
-	logStream, finalState, err := s.executor.Execute(ctx, execConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("falha ao executar lab %s: %w", labID, err)
+		Type:        domain.ExecutionType(lab.Type),
 	}
 
-	return logStream, finalState, nil
+	logStream, finalState, err := s.executor.Execute(ctx, execConfig)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("falha ao executar lab %s: %w", labID, err)
+	}
+
+	return logStream, finalState, ws.ID, nil
+}
+
+func (s *LabService) ValidateLab(
+	ctx context.Context,
+	labID string,
+) (<-chan ExecutionResult, <-chan ExecutionFinalState, string, error) {
+	lab, err := s.repo.GetLabByID(ctx, labID)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("falha ao buscar lab para o lab %s: %w", labID, err)
+	}
+
+	ws, err := s.repo.GetWorkspaceByLabID(ctx, labID)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("falha ao buscar workspace para o lab %s: %w", labID, err)
+	}
+
+	if lab.ValidationCode == "" {
+		return nil, nil, "", fmt.Errorf("lab %s não possui código de validação", labID)
+	}
+
+	execConfig := domain.ExecutionConfig{
+		WorkspaceID: ws.ID,
+		Code:        lab.ValidationCode,
+		State:       ws.State,
+		Type:        domain.ExecutionType(lab.Type),
+	}
+
+	logStream, finalState, err := s.executor.Execute(ctx, execConfig)
+	return logStream, finalState, ws.ID, err
 }
 
 func (s *LabService) SaveWorkspaceStatus(ctx context.Context, workspaceId string, status string) error {
@@ -100,28 +129,33 @@ func (s *LabService) GetLabDetails(ctx context.Context, labID string) (*domain.L
 	return lab, ws, nil
 }
 
-func (s *LabService) CreateLab(ctx context.Context, title, labType, instructions, initialCode, trackID string, labOrder int) (*domain.Lab, error) {
-    // Validação básica
-    if title == "" || labType == "" {
-        return nil, fmt.Errorf("titulo e tipo são obrigatórios")
-    }
+func (s *LabService) CreateLab(
+	ctx context.Context,
+	title, labType, instructions, initialCode string,
+	trackID string,
+	labOrder int,
+	validationCode string, // NOVO PARAMETRO
+) (*domain.Lab, error) {
+	if title == "" || labType == "" {
+		return nil, fmt.Errorf("titulo e tipo são obrigatórios")
+	}
 
-    newLab := &domain.Lab{
-        ID:           uuid.New().String(), // Gera um ID único
-        Title:        title,
-        Type:         labType,
-        Instructions: instructions,
-        InitialCode:  initialCode,
-		TrackID:      trackID,
-		LabOrder:     labOrder,
-        // CreatedAt será definido pelo banco ou podemos definir aqui se preferir
-    }
+	newLab := &domain.Lab{
+		ID:             uuid.New().String(),
+		Title:          title,
+		Type:           labType,
+		Instructions:   instructions,
+		InitialCode:    initialCode,
+		TrackID:        trackID,
+		LabOrder:       labOrder,
+		ValidationCode: validationCode,
+	}
 
-    if err := s.repo.CreateLab(ctx, newLab); err != nil {
-        return nil, fmt.Errorf("falha ao criar lab: %w", err)
-    }
+	if err := s.repo.CreateLab(ctx, newLab); err != nil {
+		return nil, fmt.Errorf("falha ao criar lab: %w", err)
+	}
 
-    return newLab, nil
+	return newLab, nil
 }
 
 func (s *LabService) ListLabs(ctx context.Context) ([]*domain.Lab, error) {
@@ -148,40 +182,114 @@ func (s *LabService) CleanLab(ctx context.Context, labId string) error {
 	return err
 }
 
-
 func (s *LabService) CreateTrack(ctx context.Context, title, description string) (*domain.Track, error) {
-    if title == "" {
-        return nil, fmt.Errorf("titulo é obrigatório")
-    }
+	if title == "" {
+		return nil, fmt.Errorf("titulo é obrigatório")
+	}
 
-    newTrack := &domain.Track{
-        ID:           uuid.New().String(),
-        Title:        title,
-        Description:  description,
-    }
+	newTrack := &domain.Track{
+		ID:          uuid.New().String(),
+		Title:       title,
+		Description: description,
+	}
 
-    if err := s.repo.CreateTrack(ctx, newTrack); err != nil {
-        return nil, fmt.Errorf("falha ao criar trilha: %w", err)
-    }
+	if err := s.repo.CreateTrack(ctx, newTrack); err != nil {
+		return nil, fmt.Errorf("falha ao criar trilha: %w", err)
+	}
 
-    return newTrack, nil
+	return newTrack, nil
 }
 
 // ListTracks lista todas as trilhas e seus labs
 func (s *LabService) ListTracks(ctx context.Context) ([]*domain.Track, error) {
-    tracks, err := s.repo.ListTracks(ctx)
-    if err != nil {
-        return nil, fmt.Errorf("falha ao listar trilhas: %w", err)
-    }
+	tracks, err := s.repo.ListTracks(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("falha ao listar trilhas: %w", err)
+	}
 
-    for _, track := range tracks {
-        labs, err := s.repo.ListLabsByTrackID(ctx, track.ID)
-        if err != nil {
-            log.Printf("AVISO: Falha ao carregar labs para trilha %s: %v", track.ID, err)
-            continue 
-        }
-        track.Labs = labs
-    }
+	for _, track := range tracks {
+		labs, err := s.repo.ListLabsByTrackID(ctx, track.ID)
+		if err != nil {
+			log.Printf("AVISO: Falha ao carregar labs para trilha %s: %v", track.ID, err)
+			continue
+		}
+		track.Labs = labs
+	}
 
-    return tracks, nil
+	return tracks, nil
+}
+
+func (s *LabService) UpdateLab(ctx context.Context, id, title, labType, instructions, initialCode, trackID string, labOrder int, validationCode string) (*domain.Lab, error) {
+	existingLab, err := s.repo.GetLabByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existingLab == nil {
+		return nil, fmt.Errorf("lab com ID %s não encontrado", id)
+	}
+
+	if title != "" {
+		existingLab.Title = title
+	}
+	if labType != "" {
+		existingLab.Type = labType
+	}
+	if instructions != "" {
+		existingLab.Instructions = instructions
+	}
+	if initialCode != "" {
+		existingLab.InitialCode = initialCode
+	}
+	if validationCode != "" {
+		existingLab.ValidationCode = validationCode
+	}
+	if trackID != "" {
+		existingLab.TrackID = trackID
+	}
+	if labOrder != 0 {
+		existingLab.LabOrder = labOrder
+	}
+
+	if err := s.repo.UpdateLab(ctx, existingLab); err != nil {
+		return nil, err
+	}
+
+	return existingLab, nil
+}
+
+func (s *LabService) UpdateTrack(ctx context.Context, id, title, description string) (*domain.Track, error) {
+	existingTrack, err := s.repo.GetTrackByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existingTrack == nil {
+		return nil, fmt.Errorf("trilha com ID %s não encontrada", id)
+	}
+
+	if title != "" {
+		existingTrack.Title = title
+	}
+	if description != "" {
+		existingTrack.Description = description
+	}
+
+	if err := s.repo.UpdateTrack(ctx, existingTrack); err != nil {
+		return nil, err
+	}
+
+	return existingTrack, nil
+}
+
+func (s *LabService) DeleteLab(ctx context.Context, id string) error {
+	if err := s.repo.DeleteLab(ctx, id); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *LabService) DeleteTrack(ctx context.Context, id string) error {
+	if err := s.repo.DeleteTrack(ctx, id); err != nil {
+		return err
+	}
+	return nil
 }

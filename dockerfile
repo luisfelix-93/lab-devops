@@ -25,8 +25,9 @@ COPY . .
 # -o /app/lab-api : Salva o binário compilado como 'lab-api'
 # -ldflags="-s -w" : Deixa o binário menor (remove símbolos de debug)
 # ./cmd/lab-api/main.go : O ponto de entrada
-RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod go build -o /app/lab-api -ldflags="-s -w" ./cmd/lab-api/main.go
-
+# Adicionamos -tags musl e -extldflags '-static' para garantir que o SQLite rode em qualquer Alpine
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod \
+    go build -tags musl -ldflags="-s -w -extldflags '-static'" -o /app/lab-api ./cmd/lab-api/main.go
 # 
 # STAGE 2: A Imagem Final (Final)
 # 

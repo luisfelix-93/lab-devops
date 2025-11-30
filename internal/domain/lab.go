@@ -12,4 +12,5 @@ type Lab struct {
 
 	TrackID      string    `json:"track_id"`
 	LabOrder     int       `json:"lab_order"`
+	ValidationCode string  `json:"-"`
 }

@@ -31,4 +31,11 @@ func RegisterRoutes(e *echo.Echo, h *Handler) {
 	g.GET("/tracks", h.HandleListTracks)
     // Rota para criar uma nova Trilha
     g.POST("/tracks", h.HandleCreateTrack)
+
+	g.PATCH("/tracks/:trackId", h.HandleUpdateTrack)
+	g.DELETE("/tracks/:trackId", h.HandleDeleteTrack)
+
+
+	g.PATCH("/labs/:labId", h.HandleUpdateLab)
+	g.DELETE("/labs/:labId", h.HandlerDeleteLab)
 }

@@ -175,7 +175,72 @@ A documentação do código não especifica um método de autenticação. Assume
   }
   ```
 - **Respostas:**
-  - **21 Created:** Retorna o objeto da trilha criada.
+  - **201 Created:** Retorna o objeto da trilha criada.
   - **400 Bad Request:** Payload da requisição é inválido.
   - **500 Internal Server Error:** Falha ao criar a trilha.
+
+---
+
+#### **PATCH /tracks/{trackID}**
+
+- **Descrição:** Atualiza uma trilha existente.
+- **Parâmetros da URL:**
+  - `trackID` (string, **obrigatório**): O ID da trilha a ser atualizada.
+- **Corpo da Requisição (JSON):**
+  - Campos opcionais. Apenas os campos enviados serão atualizados.
+  ```json
+  {
+    "title": "Título Atualizado",
+    "description": "Nova descrição."
+  }
+  ```
+- **Respostas:**
+  - **200 OK:** Retorna o objeto da trilha atualizada.
+  - **400 Bad Request:** Payload da requisição é inválido.
+  - **500 Internal Server Error:** Falha ao atualizar a trilha.
+
+---
+
+#### **DELETE /tracks/{trackID}**
+
+- **Descrição:** Deleta uma trilha específica.
+- **Parâmetros da URL:**
+  - `trackID` (string, **obrigatório**): O ID da trilha a ser deletada.
+- **Respostas:**
+  - **200 OK:**
+    ```json
+    {
+      "message": "Track deletado com sucesso"
+    }
+    ```
+  - **500 Internal Server Error:** Falha ao deletar a trilha.
+
+---
+
+### Atualizações de Labs
+
+---
+
+#### **PATCH /labs/{labID}**
+
+- **Descrição:** Atualiza um laboratório existente.
+- **Parâmetros da URL:**
+  - `labID` (string, **obrigatório**): O ID do laboratório a ser atualizado.
+- **Corpo da Requisição (JSON):**
+  - Campos opcionais. Apenas os campos enviados serão atualizados.
+  ```json
+  {
+    "title": "Título Atualizado",
+    "type": "terraform",
+    "instructions": "Novas instruções...",
+    "initial_code": "...",
+    "track_id": "...",
+    "lab_order": 2,
+    "validation_code": "..."
+  }
+  ```
+- **Respostas:**
+  - **200 OK:** Retorna o objeto do laboratório atualizado.
+  - **400 Bad Request:** Payload da requisição é inválido.
+  - **500 Internal Server Error:** Falha ao atualizar o laboratório.
 
