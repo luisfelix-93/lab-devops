@@ -189,6 +189,13 @@ This schema enables tracking of user progress and validation of lab submissions.
     - Labs now have a `validation_code` field to verify user solutions.
     - Immediate feedback on success/failure of challenges.
 
+### November 29, 2025
+- **Lab & Track Management**: Added full CRUD capabilities for Labs and Tracks.
+    - New API endpoints for updating (`PATCH`) and deleting (`DELETE`) labs and tracks.
+    - Enhanced `LabService` to handle these operations securely.
+- **Bug Fixes**: Resolved issues in the Docker executor to ensure reliable lab execution.
+- **Infrastructure**: Initial configuration improvements and Dockerfile optimizations (including LocalStack network aliases).
+
 
 ## How to Contribute
 

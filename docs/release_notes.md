@@ -1,23 +1,21 @@
-# Release Notes - Validação Automática de Labs
+# Release Notes - 29 de Novembro de 2025
 
-## Novidades
+Estamos felizes em anunciar uma nova atualização para a plataforma **Lab DevOps API**. Esta versão traz melhorias significativas na gestão de conteúdo e estabilidade do sistema.
 
-### ✨ Validação Automática de Código
-Agora, a plataforma Lab DevOps conta com um sistema inteligente de validação de desafios!
-- **Feedback Instantâneo**: Ao submeter sua solução, o sistema verifica automaticamente se o objetivo do laboratório foi alcançado.
-- **Correção Precisa**: Cada lab possui critérios específicos de sucesso (ex: verificar se um Pod Kubernetes está rodando ou se um bucket S3 foi criado).
-- **Acompanhamento de Progresso**: Seus laboratórios só serão marcados como "Concluídos" após passarem na validação automática.
+## 🚀 Novidades
 
-### 🚀 Novos Desafios
-- **Labs Kubernetes (CKA)**: Adicionamos suporte a laboratórios preparatórios para a certificação CKA, com validação automática de recursos.
+### Gestão Completa de Trilhas e Labs
+Agora você tem controle total sobre o conteúdo da plataforma!
+- **Atualização de Trilhas e Labs**: Corrija erros de digitação, atualize instruções ou modifique configurações de laboratórios e trilhas existentes diretamente pela API.
+- **Remoção de Conteúdo**: Exclua laboratórios ou trilhas obsoletas para manter o catálogo de aprendizado sempre organizado.
+
+### Melhorias na Execução de Labs
+- **Maior Confiabilidade**: Fizemos ajustes importantes no motor de execução (Docker) para garantir que seus laboratórios rodem de forma mais fluida e sem interrupções inesperadas.
+- **Feedback Mais Preciso**: O sistema de logs e validação foi aprimorado para fornecer retornos mais claros durante a execução dos exercícios.
+
+### Infraestrutura
+- **Otimizações de Rede**: Melhorias na comunicação interna entre os serviços (API e LocalStack) para reduzir latência e erros de conexão.
+- **Setup Inicial**: O processo de inicialização do banco de dados e ambiente foi refinado para facilitar novas instalações.
 
 ---
-
-## Melhorias Técnicas
-
-- **API WebSocket**: O endpoint de execução agora suporta o modo de validação (`action: "validate"`), permitindo separar a execução de testes da execução livre.
-- **Banco de Dados**: Otimizações na estrutura de dados para suportar scripts de validação personalizados por laboratório.
-
----
-
-*Aproveite as novidades e bons estudos!*
+*Obrigado por usar a Lab DevOps API!*

@@ -22,7 +22,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=ec2,s3,lambda,sqs,route53,s3control,sts
+      - SERVICES=ec2,s3,lambda,sqs,route53,s3control,sts,iam
       - DEBUG=1
     volumes:
       - localstack_data:/var/lib/localstack
