@@ -1,53 +1,50 @@
-# Resumo do PR
+# Resumo das Alterações Recentes
 
-## Últimos 3 Commits
+Este documento detalha as alterações realizadas nos dois últimos commits, focando na unificação do fluxo de execução e validação, e na configuração dinâmica da aplicação.
 
-### 1. `53be052` - 20251129 - novas rotas
-**Data:** 29 de Novembro de 2025
-**Autor:** luisfelix-93
+## 1. Commit `d14fa22` - "alterações projeto"
 
-Este commit implementa novas funcionalidades para gerenciamento de Trilhas (Tracks) e Laboratórios (Labs), adicionando rotas para atualização e remoção.
+### 🚀 Principais Mudanças
+Este commit introduz uma mudança significativa na experiência do usuário e no fluxo de backend: **Validação Automática**.
 
-**Alterações Principais:**
-- **API/Rotas (`internal/api/routes.go`):**
-    - Adicionada rota `PATCH /tracks/:trackId` para atualizar trilhas.
-    - Adicionada rota `DELETE /tracks/:trackId` para remover trilhas.
-    - Adicionada rota `PATCH /labs/:labId` para atualizar laboratórios.
-    - Adicionada rota `DELETE /labs/:labId` para remover laboratórios.
-- **Handlers (`internal/api/handler.go`):**
-    - Implementado `HandleUpdateTrack`: Processa a atualização de título e descrição de uma trilha.
-    - Implementado `HandleDeleteLab`: Processa a remoção de um laboratório.
-    - Implementado `HandleDeleteTrack`: Processa a remoção de uma trilha.
-- **Serviço (`internal/service/lab_service.go`):**
-    - Atualizado `UpdateLab`: Ajustada a assinatura para retornar o objeto atualizado e suportar novos campos.
-    - Atualizado `UpdateTrack`: Ajustada a assinatura para retornar o objeto atualizado.
-    - Implementado `DeleteLab`: Lógica para remover um laboratório via repositório.
-    - Implementado `DeleteTrack`: Lógica para remover uma trilha via repositório.
-- **Interfaces (`internal/service/ports.go`):**
-    - Atualizadas as interfaces `LabService` e `WorkspaceRepository` (implícito) para suportar as novas operações.
+*   **Fluxo Unificado**: Ao solicitar a execução de um laboratório (`action: "execute"`), o sistema agora verifica automaticamente o código de saída. Se a execução for bem-sucedida (exit code 0), o processo de validação (`ValidateLab`) é iniciado imediatamente na mesma sessão WebSocket.
+*   **Feedback Visual**: O endpoint WebSocket agora envia mensagens de status aprimoradas com emojis (✅, ❌) para indicar claramente as etapas de execução e validação.
+*   **Documentação**: O arquivo `docs/websocket.md` foi atualizado para documentar o novo comportamento, onde a validação manual é marcada como opcional/secundária.
 
-### 2. `b845520` - 20251129 - correção de bugs
-**Data:** 29 de Novembro de 2025
-**Autor:** luisfelix-93
+### 🛠️ Detalhes Técnicos
 
-Este commit foca na correção de bugs, principalmente relacionados à execução de laboratórios.
+#### `internal/api/handler.go`
+*   Refatoração completa do método `HandlerLabExecute`.
+*   Implementação de lógica condicional: `func "execute" -> sucesso? -> trigger "validate"`.
+*   Criação de variáveis de controle como `shouldValidateAfter` para gerenciar a transição de estado.
+*   Correção de tags JSON na struct `CreateLabRequest`.
 
-**Alterações Principais:**
-- **Executor (`internal/executor/docker_executor.go`):**
-    - Correções na lógica de execução de containers Docker (inferido pelos arquivos alterados).
-    - Possíveis ajustes no tratamento de erros ou streams de logs.
+#### `internal/executor/docker_executor.go`
+*   O executor agora prepara o ambiente com o arquivo `validation.yml` caso um código de validação seja fornecido.
+*   Para execuções do tipo **Ansible**, a validação é encadeada no comando de execução (`ansible-playbook ... && ansible-playbook validation.yml`), garantindo que o teste ocorra dentro do contêiner.
 
-### 3. `04edb82` - 20251128 Configuração Inicial e Migrations
-**Data:** 28 de novembro de 2025
-**Autor:** luisfelix-93
+#### Outros Arquivos
+*   `internal/service/lab_service.go`: Atualizado para passar o `ValidationCode` para o executor.
+*   `docker-compose.yaml`: Porta da API alterada de `8080:8080` para `8081:8080` (evitando conflitos).
 
-Este commit parece ser relacionado à configuração inicial do ambiente e banco de dados.
+---
 
-**Alterações Principais:**
-- **Banco de Dados (`internal/repository/sqlite_repo.go`, `db/migrations/001_init_...`):**
-    - Configuração inicial do repositório SQLite.
-    - Adição da primeira migração para criação das tabelas iniciais.
-- **Docker (`dockerfile`):**
-    - Ajustes ou criação do Dockerfile para build da aplicação.
-    - Criação de aliases para a rede interna do localstack.
+## 2. Commit `30511dc` - "20251207 - variáveis de ambiente"
 
+### 🚀 Principais Mudanças
+Foco na **Portabilidade e Configuração**. A aplicação deixou de depender de constantes hardcoded para caminhos de banco de dados e portas.
+
+### 🛠️ Detalhes Técnicos
+
+#### `cmd/lab-api/main.go`
+*   Implementação da função utilitária `getEnv`.
+*   As seguintes configurações agora são carregadas de variáveis de ambiente (com valores default):
+    *   `DB_PATH`: Caminho do banco SQLite.
+    *   `MIGRATIONS_PATH`: Caminho dos scripts SQL.
+    *   `DOCKER_NETWORK`: Rede Docker para conexão dos contêineres.
+    *   `TEMP_DIR_ROOT`: Diretório temporário para execuções.
+    *   `SERVER_PORT`: Porta de escuta do servidor HTTP.
+
+#### `docker-compose.yaml`
+*   Remoção do serviço `iam` da lista de serviços inicializados no container `localstack` (simulador-iac).
+*   Ajustes menores em variáveis de ambiente.

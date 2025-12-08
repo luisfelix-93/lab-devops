@@ -19,6 +19,7 @@ The execution environment is simulated using **LocalStack** to provision cloud r
 - **Data Persistence**: User progress, labs, and workspace status are saved in an SQLite database.
 - **Docker Isolation**: Each lab execution runs in a temporary Docker container.
 - **Workspace Status Tracking**: Tracks the completion status of labs, enabling user progress validation.
+- **Automatic Validation**: Automatically triggers solution validation upon successful code execution.
 
 ## Architecture
 
@@ -56,6 +57,7 @@ Execute automation playbooks using Ansible. The system:
 - Generates an `inventory.ini` file for localhost configuration
 - Runs playbooks in isolation using the `cytopia/ansible:latest` Docker image
 - Enables communication with other services (e.g., LocalStack) on the Docker network
+- **Auto Validation**: Runs `ansible-playbook validation.yml` automatically if provided.
 
 ### Kubernetes Labs
 Execute Kubernetes manifests in a lightweight K3s cluster. The system:
@@ -91,25 +93,20 @@ The simplest way to run the project is using `docker-compose`.
     -   Create a Docker network for container communication.
 
 3.  **Access the API**:
-    -   The API will be available at `http://localhost:8080`.
+    -   The API will be available at `http://localhost:8081` (Created generic config via env vars).
     -   The LocalStack UI will be available at `http://localhost:4566`.
 
-## Project Structure
+## Configuration (Environment Variables)
 
-```
-.
-├── cmd/lab-api/main.go     # Application entry point
-├── data/                     # Persistent data (SQLite database, temporary files)
-├── db/migrations/            # Database migrations
-├── internal/                 # Main application source code
-│   ├── api/                  # API handlers and routes
-│   ├── domain/               # Domain data structures
-│   ├── executor/             # Logic for executing code in containers
-│   ├── repository/           # Database access logic
-│   └── service/              # Business logic
-├── docker-compose.yaml       # Service orchestration (API + LocalStack)
-└── Dockerfile                # Instructions for building the API image
-```
+The application is configured using environment variables. The following are the supported variables and their default values:
+
+| Variable          | Default                                 | Description                                      |
+| ----------------- | --------------------------------------- | ------------------------------------------------ |
+| `DB_PATH`         | `./data/lab.db`                         | Path to the SQLite database file.                |
+| `MIGRATIONS_PATH` | `./db/migrations/001_init_schema.sql`   | Path to the SQL file for database initialization.|
+| `DOCKER_NETWORK`  | `minha-rede-lab`                        | Docker network for container communication.      |
+| `TEMP_DIR_ROOT`   | `/app/data/temp-exec`                   | Directory for temporary execution files.         |
+| `SERVER_PORT`     | `:8080`                                 | Port the Go server listens on (inside container).|
 
 ## API Endpoints
 
@@ -121,7 +118,7 @@ Returns the details of a specific lab and the user's last workspace state.
 -   **Method**: `GET`
 -   **Example**:
     ```bash
-    curl http://localhost:8080/api/v1/labs/lab-tf-01
+    curl http://localhost:8081/api/v1/labs/lab-tf-01
     ```
 
 ### Execute a Lab
@@ -137,14 +134,16 @@ Initiates a WebSocket connection to execute lab code and receive real-time logs.
       "user_code": "resource \"aws_s3_bucket\" \"my_bucket\" { ... }"
     }
     ```
--   **Client Message (to validate solution)**:
+    **Note**: Upon successful execution (exit code 0), the server **automatically** initiates the validation process without requiring a separate request.
+
+-   **Client Message (manual validation - optional)**:
     ```json
     {
       "action": "validate"
     }
     ```
 -   **Server Messages**:
-    -   `{"type": "log", "payload": "..."}`: An execution log line.
+    -   `{"type": "log", "payload": "..."}`: An execution log line (often with emojis like ✅/❌).
     -   `{"type": "error", "payload": "..."}`: An error message.
     -   `{"type": "complete", "payload": "..."}`: Completion message.
 
@@ -167,27 +166,10 @@ This schema enables tracking of user progress and validation of lab submissions.
 
 ## Recent Updates
 
-### November 17, 2025
-- **Workspace Status Tracking**: Added the ability to track workspace completion status. After successful lab execution, the workspace is marked as `"complete"`.
-- **Enhanced State Management**: The `WorkspaceID` is now properly captured and used when saving the final state of a lab execution.
-- **Ansible Support**: Full support for executing Ansible playbooks with dynamic inventory configuration and Docker isolation.
-
-### November 22, 2025
-- **Kubernetes Support**: Added support for running Kubernetes labs using K3s.
-- **CI/CD Pipelines**: Implemented GitHub Actions for:
-    - Automatic Pull Request creation on branch push.
-    - Automated Docker build and push on PR merge.
-- **Stability Improvements**: Fixed bugs in the Docker executor and improved logging.
-
-### November 20, 2025
-- **Learning Tracks**: Introduced structured learning paths (Tracks) to organize labs sequentially.
-- **Performance**: Optimized Docker builds using BuildKit cache mounts for faster iteration.
-
-### November 24, 2025
-- **Code Validation**: Introduced automated code validation for labs.
-    - New `validate` action in WebSocket API.
-    - Labs now have a `validation_code` field to verify user solutions.
-    - Immediate feedback on success/failure of challenges.
+### December 07, 2025
+- **Automatic Validation**: The system now automatically triggers validation after a successful execution request.
+- **Environment Variables**: Full configuration via environment variables for better portability.
+- **API Port Change**: Docker Compose now exposes the API on port `8081` by default.
 
 ### November 29, 2025
 - **Lab & Track Management**: Added full CRUD capabilities for Labs and Tracks.
