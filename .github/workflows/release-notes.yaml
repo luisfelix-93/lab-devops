@@ -1,0 +1,62 @@
+name: Release Notes Automator
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+    paths:
+      - 'docs/release_notes.md'
+
+jobs:
+  create-release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Version
+        id: generate_version
+        run: |
+          # Get current date in YYYYMMDD format
+          DATE=$(date +'%Y%m%d')
+          
+          # Find the latest tag matching the pattern 0.*.*.1
+          LATEST_TAG=$(git tag --list "0.*.*.1" --sort=-v:refname | head -n 1)
+          
+          if [[ -z "$LATEST_TAG" ]]; then
+            echo "No previous tag found matching pattern. Starting with n=0."
+            NEXT_N=1
+          else
+            echo "Found latest tag: $LATEST_TAG"
+            # Extract 'n' from 0.n.YYYYMMDD.1
+            # Cut fields by delimiter '.' -> 0 (f1), n (f2), date (f3), 1 (f4)
+            CURRENT_N=$(echo "$LATEST_TAG" | cut -d. -f2)
+            
+            if [[ ! "$CURRENT_N" =~ ^[0-9]+$ ]]; then
+               echo "::warning::Could not parse integer 'n' from tag $LATEST_TAG. Defaulting to 1."
+               NEXT_N=1
+            else
+               NEXT_N=$((CURRENT_N + 1))
+            fi
+          fi
+          
+          NEW_TAG="0.${NEXT_N}.${DATE}.1"
+          echo "Generated new tag: $NEW_TAG"
+          echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.generate_version.outputs.version }}
+          name: Release Notes - ${{ steps.generate_version.outputs.version }}
+          body_path: docs/release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

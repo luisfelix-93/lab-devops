@@ -58,3 +58,6 @@ data/
 terraform.tfstate
 terraform.tfstate.backup
 .terraform.tfstate.lock.info
+
+# Logs de execução
+log_execução.txt

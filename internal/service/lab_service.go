@@ -49,10 +49,11 @@ func (s *LabService) ExecuteLab(
 	}
 
 	execConfig := domain.ExecutionConfig{
-		WorkspaceID: ws.ID,
-		Code:        code,
-		State:       ws.State,
-		Type:        domain.ExecutionType(lab.Type),
+		WorkspaceID: 	ws.ID,
+		Code:        	code,
+		State:       	ws.State,
+		ValidationCode: lab.ValidationCode,
+		Type:        	domain.ExecutionType(lab.Type),
 	}
 
 	logStream, finalState, err := s.executor.Execute(ctx, execConfig)
