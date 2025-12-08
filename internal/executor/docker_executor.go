@@ -183,6 +183,12 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		if err := os.WriteFile(filepath.Join(execDir, "playbook.yml"), []byte(cleanCode), 0644); err != nil {
 			return "", err
 		}
+		if config.ValidationCode != "" {
+			cleanValidation := strings.ReplaceAll(config.ValidationCode, "\r\n", "\n")
+			if err := os.WriteFile(filepath.Join(execDir, "validation.yml"), []byte(cleanValidation), 0644); err != nil {
+				return "", err
+			}
+		}
 		if err := os.WriteFile(filepath.Join(execDir, "inventory.ini"), []byte(ansibleLocalInventory), 0644); err != nil {
 			return "", err
 		}
@@ -238,6 +244,9 @@ func (e *dockerExecutor) buildCommand(ctx context.Context, execDir string, confi
 	case domain.TypeAnsible:
 		image := "cytopia/ansible:latest"
 		ansibleCommand := "ansible-playbook -i inventory.ini playbook.yml"
+		if config.ValidationCode != "" {
+			ansibleCommand += " && echo '--- INICIANDO VALIDAÇÃO ---' && ansible-playbook -i inventory.ini validation.yml"
+		}
 
 		args := []string{
 			"run", "--rm",

@@ -14,5 +14,6 @@ type ExecutionConfig struct {
 	WorkspaceID string
 	Code string
 	State []byte
+	ValidationCode string
 	Type ExecutionType
 }
