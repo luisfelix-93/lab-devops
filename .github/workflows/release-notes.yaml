@@ -46,7 +46,7 @@ jobs:
             fi
           fi
           
-          NEW_TAG="0.${NEXT_N}.${DATE}.1"
+          NEW_TAG="1.${NEXT_N}.${DATE}.1"
           echo "Generated new tag: $NEW_TAG"
           echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
 

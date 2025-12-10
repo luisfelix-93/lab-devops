@@ -13,6 +13,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 const defaultLocalstackProviderConfig = `
@@ -44,12 +52,36 @@ localhost ansible_connection=local
 `
 
 type dockerExecutor struct {
+	cli           *client.Client
 	dockerNetwork string
 	tempDirRoot   string
 	hostExecPath  string // <-- NOVO CAMPO
 }
 
+// func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Executor, error) {
+// 	if err := os.MkdirAll(tempDirRoot, 0755); err != nil {
+// 		return nil, fmt.Errorf("falha ao criar diretório temporário raiz %s: %w", tempDirRoot, err)
+// 	}
+
+// 	hostPath := os.Getenv("HOST_EXEC_PATH")
+// 	if hostPath == "" {
+// 		return nil, fmt.Errorf("variável de ambiente HOST_EXEC_PATH não está definida")
+// 	}
+
+// 	return &dockerExecutor{
+// 		dockerNetwork: dockerNetwork,
+// 		tempDirRoot:   tempDirRoot,
+// 		hostExecPath:  hostPath,
+// 	}, nil
+
+// }
+
 func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Executor, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("falha ao criar cliente Docker: %w", err)
+	}
+
 	if err := os.MkdirAll(tempDirRoot, 0755); err != nil {
 		return nil, fmt.Errorf("falha ao criar diretório temporário raiz %s: %w", tempDirRoot, err)
 	}
@@ -57,14 +89,14 @@ func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Execut
 	hostPath := os.Getenv("HOST_EXEC_PATH")
 	if hostPath == "" {
 		return nil, fmt.Errorf("variável de ambiente HOST_EXEC_PATH não está definida")
-	}
+	}	
 
 	return &dockerExecutor{
+		cli:           cli,
 		dockerNetwork: dockerNetwork,
 		tempDirRoot:   tempDirRoot,
 		hostExecPath:  hostPath,
 	}, nil
-
 }
 
 // Helper: Tenta ler provider.f da pasta data, senão usa o default
@@ -79,76 +111,290 @@ func (e *dockerExecutor) getTerraformProvider() []byte {
 	return []byte(defaultLocalstackProviderConfig)
 }
 
+// func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionConfig) (<-chan service.ExecutionResult, <-chan service.ExecutionFinalState, error) {
+// 	logStream := make(chan service.ExecutionResult)
+// 	finalState := make(chan service.ExecutionFinalState)
+
+// 	// example minimal goroutine; real execution logic should send results to logstream
+// 	go func() {
+// 		defer close(logStream)
+// 		defer close(finalState)
+
+// 		execDir, err := e.prepareWorkspace(config)
+// 		if err != nil {
+// 			log.Printf("ERRO [Executor]: Falha ao preparar workspace: %v", err)
+// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao preparar workspace: %w", err)}
+// 			return
+// 		}
+
+// 		defer os.RemoveAll(execDir)
+
+// 		cmd, err := e.buildCommand(ctx, execDir, config)
+// 		if err != nil {
+// 			log.Printf("ERRO [Executor]: Falha ao montar comando: %v", err)
+// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao montar comando: %w", err)}
+// 			return
+// 		}
+
+// 		stdoutPipe, err := cmd.StdoutPipe()
+// 		if err != nil {
+// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stdout pipe: %w", err)}
+// 			return
+// 		}
+// 		stderrPipe, err := cmd.StderrPipe()
+// 		if err != nil {
+// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stderr pipe: %w", err)}
+// 			return
+// 		}
+
+// 		var wg sync.WaitGroup
+// 		wg.Add(2) // Um para stdout, um para stderr
+// 		go e.streamPipe(stdoutPipe, logStream, &wg)
+// 		go e.streamPipe(stderrPipe, logStream, &wg)
+
+// 		log.Printf("INFO [Executor]: Iniciando execução para %s...", config.WorkspaceID)
+// 		if err := cmd.Start(); err != nil {
+// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao iniciar comando: %w", err)}
+// 			return
+// 		}
+
+// 		execErr := cmd.Wait()
+// 		log.Printf("INFO [Executor]: Execução para %s concluída com erro: %v", config.WorkspaceID, execErr)
+
+// 		wg.Wait()
+
+// 		newState, readErr := e.readFinalState(execDir, config)
+// 		if readErr != nil {
+// 			if execErr == nil {
+// 				execErr = readErr
+// 			}
+// 		}
+
+// 		finalState <- service.ExecutionFinalState{
+// 			WorkspaceID: config.WorkspaceID,
+// 			NewState:    newState,
+// 			Error:       execErr,
+// 		}
+// 		log.Printf("INFO [Executor]: Goroutine para %s finalizada.", config.WorkspaceID)
+
+// 	}()
+
+// 	return logStream, finalState, nil
+// }
 func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionConfig) (<-chan service.ExecutionResult, <-chan service.ExecutionFinalState, error) {
 	logStream := make(chan service.ExecutionResult)
 	finalState := make(chan service.ExecutionFinalState)
 
-	// example minimal goroutine; real execution logic should send results to logstream
 	go func() {
 		defer close(logStream)
 		defer close(finalState)
 
+		// 1. Preparar arquivos locais
 		execDir, err := e.prepareWorkspace(config)
 		if err != nil {
-			log.Printf("ERRO [Executor]: Falha ao preparar workspace: %v", err)
-			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao preparar workspace: %w", err)}
+			reportError(config.WorkspaceID, err, finalState)
 			return
 		}
-
 		defer os.RemoveAll(execDir)
 
-		cmd, err := e.buildCommand(ctx, execDir, config)
+		// 2. Configurar o Container
+		containerConfig, hostConfig, netConfig, err := e.getContainerConfig(config)
 		if err != nil {
-			log.Printf("ERRO [Executor]: Falha ao montar comando: %v", err)
-			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao montar comando: %w", err)}
+			reportError(config.WorkspaceID, err, finalState)
 			return
 		}
 
-		stdoutPipe, err := cmd.StdoutPipe()
+		// 3. Criar o Container
+		resp, err := e.cli.ContainerCreate(ctx, containerConfig, hostConfig, netConfig, nil, "")
 		if err != nil {
-			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stdout pipe: %w", err)}
-			return
-		}
-		stderrPipe, err := cmd.StderrPipe()
-		if err != nil {
-			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stderr pipe: %w", err)}
-			return
-		}
-
-		var wg sync.WaitGroup
-		wg.Add(2) // Um para stdout, um para stderr
-		go e.streamPipe(stdoutPipe, logStream, &wg)
-		go e.streamPipe(stderrPipe, logStream, &wg)
-
-		log.Printf("INFO [Executor]: Iniciando execução para %s...", config.WorkspaceID)
-		if err := cmd.Start(); err != nil {
-			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao iniciar comando: %w", err)}
-			return
-		}
-
-		execErr := cmd.Wait()
-		log.Printf("INFO [Executor]: Execução para %s concluída com erro: %v", config.WorkspaceID, execErr)
-
-		wg.Wait()
-
-		newState, readErr := e.readFinalState(execDir, config)
-		if readErr != nil {
-			if execErr == nil {
-				execErr = readErr
+			// Se a imagem não existir, tenta fazer pull (opcional, mas recomendado)
+			if client.IsErrNotFound(err) {
+				log.Printf("INFO [Executor]: Imagem %s não encontrada. Tentando pull...", containerConfig.Image)
+				_, pullErr := e.cli.ImagePull(ctx, containerConfig.Image, image.PullOptions{})
+				if pullErr != nil {
+					reportError(config.WorkspaceID, fmt.Errorf("falha ao baixar imagem %s: %w", containerConfig.Image, pullErr), finalState)
+					return
+				}
+				// Tenta criar de novo
+				resp, err = e.cli.ContainerCreate(ctx, containerConfig, hostConfig, netConfig, nil, "")
+			}
+			
+			if err != nil {
+				reportError(config.WorkspaceID, fmt.Errorf("falha ao criar container: %w", err), finalState)
+				return
 			}
 		}
 
-		finalState <- service.ExecutionFinalState{
-			WorkspaceID: config.WorkspaceID,
-			NewState:    newState,
-			Error:       execErr,
-		}
-		log.Printf("INFO [Executor]: Goroutine para %s finalizada.", config.WorkspaceID)
+		containerID := resp.ID
+		// Garante a remoção do container ao final
+		defer func() {
+			removeOpts := container.RemoveOptions{Force: true}
+			if err := e.cli.ContainerRemove(context.Background(), containerID, removeOpts); err != nil {
+				log.Printf("ERRO [Executor]: Falha ao remover container %s: %v", containerID, err)
+			}
+		}()
 
+		// 4. Iniciar o Container
+		if err := e.cli.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+			reportError(config.WorkspaceID, fmt.Errorf("falha ao iniciar container: %w", err), finalState)
+			return
+		}
+
+		// 5. Capturar Logs (Stdout/Stderr)
+		out, err := e.cli.ContainerLogs(ctx, containerID, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true})
+		if err != nil {
+			reportError(config.WorkspaceID, fmt.Errorf("falha ao obter logs: %w", err), finalState)
+			return
+		}
+		
+		// Goroutine para processar o stream de logs
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// StdCopy demultiplexa o stream do Docker em stdout e stderr
+			// Aqui jogamos ambos para um PipeReader para processar linha a linha
+			rd, wr := io.Pipe()
+			
+			go func() {
+				// Escreve tanto stdout quanto stderr no pipe
+				stdcopy.StdCopy(wr, wr, out)
+				wr.Close()
+			}()
+
+			e.streamLogs(rd, logStream)
+		}()
+
+		// 6. Aguardar finalização
+		statusCh, errCh := e.cli.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+		select {
+		case err := <-errCh:
+			if err != nil {
+				reportError(config.WorkspaceID, fmt.Errorf("erro durante execução do container: %w", err), finalState)
+				return // Importante retornar para não processar estado final inválido
+			}
+		case status := <-statusCh:
+			wg.Wait() // Espera terminar de processar logs
+			
+			var execErr error
+			if status.StatusCode != 0 {
+				execErr = fmt.Errorf("comando finalizou com código de saída: %d", status.StatusCode)
+			}
+
+			// 7. Ler estado final (Terraform)
+			newState, readErr := e.readFinalState(execDir, config)
+			if readErr != nil && execErr == nil {
+				execErr = readErr
+			}
+
+			finalState <- service.ExecutionFinalState{
+				WorkspaceID: config.WorkspaceID,
+				NewState:    newState,
+				Error:       execErr,
+			}
+		}
 	}()
 
 	return logStream, finalState, nil
 }
+
+func (e *dockerExecutor) getContainerConfig(config domain.ExecutionConfig)  (*container.Config, *container.HostConfig, *network.NetworkingConfig, error) {
+	hostDir := filepath.Join(e.hostExecPath, config.WorkspaceID)
+
+	mounts := []mount.Mount{
+		{
+		Type: mount.TypeBind,
+		Source: hostDir,
+		Target: "/workspace",
+		},
+	}
+
+	var img string
+	var cmd []string
+	var env []string
+	workingDir := "/workspace"
+	entrypoint := []string{"/bin/sh"}
+	switch config.Type {
+	case domain.TypeTerraform:
+		img = "hashicorp/terraform:latest"
+		cmd = []string{"-c", "mkdir -p /tmp/plugins && rm -rf .terraform/ && terraform init -upgrade && terraform apply -auto-approve"}
+		env = []string{"TF_PLUGIN_CACHE_DIR=/tmp/plugins"}
+	
+	case domain.TypeAnsible:
+		img = "cytopia/ansible:latest"
+		ansibleCmd := "ansible-playbook -i inventory.ini playbook.yml"
+		if config.ValidationCode != "" {
+			ansibleCmd += " && echo '--- INICIANDO VALIDAÇÃO ---' && ansible-playbook -i inventory.ini validation.yml"
+		}
+		cmd = []string{"-c", ansibleCmd}
+
+	case domain.TypeLinux:
+		img = "alpine:latest"
+		cmd = []string{"run.sh"}
+
+	case domain.TypeDocker:
+		img = "docker:cli"
+		cmd = []string{"run.sh"}
+		// Adiciona o socket do Docker
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeBind,
+			Source: "/var/run/docker.sock",
+			Target: "/var/run/docker.sock",
+		})
+
+	case domain.TypeK8s:
+		img = "bitnami/kubectl:latest"
+		cmd = []string{"run.sh"}
+		env = []string{"KUBECONFIG=/workspace/kubeconfig.yaml"}
+	default:
+		return nil, nil, nil, fmt.Errorf("tipo de execução '%s' não suportado", config.Type)
+	}
+
+	containerConfig := &container.Config{
+		Image:      img,
+		Cmd:        cmd,
+		Env:        env,
+		WorkingDir: workingDir,
+		Entrypoint: entrypoint, // Usa o da imagem ou sobrescreve se necessário
+	}
+
+	hostConfig := &container.HostConfig{
+		Mounts:      mounts,
+		AutoRemove:  false, // Controlamos a remoção manualmente no defer
+	}
+
+	netConfig := &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			e.dockerNetwork: {},
+		},
+	}
+
+	return containerConfig, hostConfig, netConfig, nil
+}
+
+func (e *dockerExecutor) streamLogs(reader io.Reader, logStream chan<- service.ExecutionResult) {
+	buf := make([]byte, 1024)
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			lines := strings.Split(string(buf[:n]), "\n")
+			for _, line := range lines {
+				logStream <- service.ExecutionResult{Line: line}
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+}
+
+
+
+func reportError(wsID string, err error, ch chan<- service.ExecutionFinalState) {
+	log.Printf("ERRO [Executor]: %v", err)
+	ch <- service.ExecutionFinalState{WorkspaceID: wsID, Error: err}
+}
+
 
 func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string, error) {
 	execDir := filepath.Join(e.tempDirRoot, config.WorkspaceID)
