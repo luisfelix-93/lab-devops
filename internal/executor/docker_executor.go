@@ -58,23 +58,7 @@ type dockerExecutor struct {
 	hostExecPath  string // <-- NOVO CAMPO
 }
 
-// func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Executor, error) {
-// 	if err := os.MkdirAll(tempDirRoot, 0755); err != nil {
-// 		return nil, fmt.Errorf("falha ao criar diretório temporário raiz %s: %w", tempDirRoot, err)
-// 	}
 
-// 	hostPath := os.Getenv("HOST_EXEC_PATH")
-// 	if hostPath == "" {
-// 		return nil, fmt.Errorf("variável de ambiente HOST_EXEC_PATH não está definida")
-// 	}
-
-// 	return &dockerExecutor{
-// 		dockerNetwork: dockerNetwork,
-// 		tempDirRoot:   tempDirRoot,
-// 		hostExecPath:  hostPath,
-// 	}, nil
-
-// }
 
 func NewDockerExecutor(dockerNetwork string, tempDirRoot string) (service.Executor, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -111,76 +95,7 @@ func (e *dockerExecutor) getTerraformProvider() []byte {
 	return []byte(defaultLocalstackProviderConfig)
 }
 
-// func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionConfig) (<-chan service.ExecutionResult, <-chan service.ExecutionFinalState, error) {
-// 	logStream := make(chan service.ExecutionResult)
-// 	finalState := make(chan service.ExecutionFinalState)
 
-// 	// example minimal goroutine; real execution logic should send results to logstream
-// 	go func() {
-// 		defer close(logStream)
-// 		defer close(finalState)
-
-// 		execDir, err := e.prepareWorkspace(config)
-// 		if err != nil {
-// 			log.Printf("ERRO [Executor]: Falha ao preparar workspace: %v", err)
-// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao preparar workspace: %w", err)}
-// 			return
-// 		}
-
-// 		defer os.RemoveAll(execDir)
-
-// 		cmd, err := e.buildCommand(ctx, execDir, config)
-// 		if err != nil {
-// 			log.Printf("ERRO [Executor]: Falha ao montar comando: %v", err)
-// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao montar comando: %w", err)}
-// 			return
-// 		}
-
-// 		stdoutPipe, err := cmd.StdoutPipe()
-// 		if err != nil {
-// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stdout pipe: %w", err)}
-// 			return
-// 		}
-// 		stderrPipe, err := cmd.StderrPipe()
-// 		if err != nil {
-// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao obter stderr pipe: %w", err)}
-// 			return
-// 		}
-
-// 		var wg sync.WaitGroup
-// 		wg.Add(2) // Um para stdout, um para stderr
-// 		go e.streamPipe(stdoutPipe, logStream, &wg)
-// 		go e.streamPipe(stderrPipe, logStream, &wg)
-
-// 		log.Printf("INFO [Executor]: Iniciando execução para %s...", config.WorkspaceID)
-// 		if err := cmd.Start(); err != nil {
-// 			finalState <- service.ExecutionFinalState{WorkspaceID: config.WorkspaceID, Error: fmt.Errorf("falha ao iniciar comando: %w", err)}
-// 			return
-// 		}
-
-// 		execErr := cmd.Wait()
-// 		log.Printf("INFO [Executor]: Execução para %s concluída com erro: %v", config.WorkspaceID, execErr)
-
-// 		wg.Wait()
-
-// 		newState, readErr := e.readFinalState(execDir, config)
-// 		if readErr != nil {
-// 			if execErr == nil {
-// 				execErr = readErr
-// 			}
-// 		}
-
-// 		finalState <- service.ExecutionFinalState{
-// 			WorkspaceID: config.WorkspaceID,
-// 			NewState:    newState,
-// 			Error:       execErr,
-// 		}
-// 		log.Printf("INFO [Executor]: Goroutine para %s finalizada.", config.WorkspaceID)
-
-// 	}()
-
-// 	return logStream, finalState, nil
-// }
 func (e *dockerExecutor) Execute(ctx context.Context, config domain.ExecutionConfig) (<-chan service.ExecutionResult, <-chan service.ExecutionFinalState, error) {
 	logStream := make(chan service.ExecutionResult)
 	finalState := make(chan service.ExecutionFinalState)
@@ -346,6 +261,23 @@ func (e *dockerExecutor) getContainerConfig(config domain.ExecutionConfig)  (*co
 		img = "bitnami/kubectl:latest"
 		cmd = []string{"run.sh"}
 		env = []string{"KUBECONFIG=/workspace/kubeconfig.yaml"}
+	case domain.TypeGithubActions:
+		img = "docker:cli"
+		entrypoint = nil
+		cmd = []string{"/bin/sh", "-c", 
+			"apk add --no-cache act --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community && " + 
+			"act push " +
+			"--bind " + 
+			"--directory /workspace " +
+			"-P ubuntu-latest=node:18-buster-slim " + 
+			"--container-architecture linux/amd64"}
+
+		// Precisamos do socket para o act criar os containers irmãos
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeBind,
+			Source: "/var/run/docker.sock",
+			Target: "/var/run/docker.sock",
+		})
 	default:
 		return nil, nil, nil, fmt.Errorf("tipo de execução '%s' não suportado", config.Type)
 	}
@@ -463,6 +395,19 @@ func (e *dockerExecutor) prepareWorkspace(config domain.ExecutionConfig) (string
 		if err := os.WriteFile(filepath.Join(execDir, "kubeconfig.yaml"), []byte(kcStr), 0644); err != nil {
 			return "", err
 		}
+
+	case domain.TypeGithubActions:
+		log.Printf("DEBUG [Executor]: A preparar ambiente Github Actions...")
+		workflowDir := filepath.Join(execDir, ".github", "workflows")
+		if err := os.MkdirAll(workflowDir, 0755); err != nil {
+			return "", fmt.Errorf("falha ao criar diretório de workflows: %w", err)
+		}
+		
+		if err := os.WriteFile(filepath.Join(workflowDir, "main.yml"), []byte(cleanCode), 0644); err != nil {
+			return "", err
+		}
+	default:
+		os.WriteFile(filepath.Join(execDir, "run.sh"), []byte(cleanCode), 0755)
 	}
 
 	return execDir, nil
