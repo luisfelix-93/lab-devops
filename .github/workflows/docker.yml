@@ -33,7 +33,7 @@ jobs:
                 push: true
                 tags: |
                   ${{ secrets.DOCKER_HUB_USERNAME }}/lab-devops-api:latest
-                  ${{ secrets.DOCKER_HUB_USERNAME }}/lab-devops-api-${{ steps.get_date.outputs.date }}:latest
+                  ${{ secrets.DOCKER_HUB_USERNAME }}/lab-devops-api:${{ steps.get_date.outputs.date }}:latest
             
             - name: Notificar sucesso
               run: echo "Docker build e push realizado com sucesso"
