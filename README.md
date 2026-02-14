@@ -41,8 +41,8 @@ The project follows a layered architecture for separation of concerns:
 
 4.  **Execution Layer (Executor)**:
     -   Location: `internal/executor/`
-    -   Responsibility: Handle code execution in external environments (in this case, Docker containers).
-    -   Technologies: `Docker Engine`.
+    -   Responsibility: Handle code execution in external environments using a **Session Manager** pattern — a long-lived Docker container is created and steps (execution + validation) are run via `docker exec`.
+    -   Technologies: `Docker Engine SDK`, retry logic, `stdcopy` log demultiplexing.
 
 ## Supported Lab Types
 
@@ -165,6 +165,13 @@ The `workspaces` table includes:
 This schema enables tracking of user progress and validation of lab submissions.
 
 ## Recent Updates
+
+### February 14, 2026
+- **Session Manager Executor**: Complete rewrite of the execution engine. Containers are now long-lived, with execution and validation steps running via `docker exec` instead of one-shot runs.
+- **Retry Logic**: Container creation now retries up to 3 times with progressive delays, handling Docker Desktop + WSL2 filesystem sync race conditions.
+- **K8s Validation Retry**: Kubernetes lab validation now polls for up to 30 seconds (every 2s), waiting for resources to become ready.
+- **Handler Simplification**: The WebSocket handler no longer orchestrates validation — it's a passive consumer of execution results. Removed two-phase `isValidation`/`shouldValidateAfter` flow.
+- **Expanded Domain Contract**: `ExecutionFinalState` now carries separate `ExecutionResult` and `ValidationResult` fields for granular inspection.
 
 ### December 07, 2025
 - **Automatic Validation**: The system now automatically triggers validation after a successful execution request.
