@@ -11,21 +11,21 @@ type ExecutionResult struct {
 }
 
 type ExecutionFinalState struct {
-	WorkspaceID string
-	NewState    []byte
-	Error       error
+	WorkspaceID      string
+	NewState         []byte
+	Error            error
+	ExecutionResult  domain.StepResult
+	ValidationResult domain.StepResult
 }
 
 type Executor interface {
 	Execute(ctx context.Context, config domain.ExecutionConfig) (<-chan ExecutionResult, <-chan ExecutionFinalState, error)
 }
 
-
-
 type WorkspaceRepository interface {
 	GetLabByID(ctx context.Context, labID string) (*domain.Lab, error)
 	ListLabs(ctx context.Context) ([]*domain.Lab, error)
-	GetWorkspaceByLabID(ctx context.Context, labID  string) (*domain.Workspace, error)
+	GetWorkspaceByLabID(ctx context.Context, labID string) (*domain.Workspace, error)
 	UpdateWorkspaceCode(ctx context.Context, workspaceId string, code string) error
 	UpdateWorkspaceState(ctx context.Context, workspaceId string, state []byte) error
 	GetWorkspaceState(ctx context.Context, workspaceId string) ([]byte, error)

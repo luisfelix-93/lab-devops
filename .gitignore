@@ -51,6 +51,8 @@ localstack_data/
 build/
 dist/
 data/
+!data/temp-exec/
+!data/temp-exec/.gitkeep
 *.tf
 # OS generated files
 .terraform/
@@ -60,4 +62,7 @@ terraform.tfstate.backup
 .terraform.tfstate.lock.info
 
 # Logs de execução
-log_execução.txt
+log_*.txt
+.agent/
+TODO.md
+*.spec.md

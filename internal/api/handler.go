@@ -77,22 +77,15 @@ func (h *Handler) HandlerLabExecute(c echo.Context) error {
 	var finalState <-chan service.ExecutionFinalState
 	var wsID string
 	var errExec error
-	var isValidation bool
-	var shouldValidateAfter bool // Flag para indicar se deve validar após execução
 
 	// Lógica de Decisão: Executar ou Validar?
 	switch msg.Action {
 	case "execute":
 		log.Printf("INFO [Handler]: Executando comando do usuário (Lab %s)", labID)
-		isValidation = false
-		shouldValidateAfter = true // Define que após sucesso, deve rodar validação
-		// Chama ExecuteLab (retorna 4 valores)
 		logStream, finalState, wsID, errExec = h.labService.ExecuteLab(ctx, labID, msg.UserCode)
 
 	case "validate":
 		log.Printf("INFO [Handler]: Validando solução (Lab %s)", labID)
-		isValidation = true
-		// Chama ValidateLab (retorna 4 valores)
 		logStream, finalState, wsID, errExec = h.labService.ValidateLab(ctx, labID)
 
 	default:
@@ -106,7 +99,7 @@ func (h *Handler) HandlerLabExecute(c echo.Context) error {
 		return errExec
 	}
 
-	// Loop de Streaming (Goroutine para não bloquear o WS)
+	// Loop de Streaming
 	go func() {
 		for {
 			select {
@@ -127,52 +120,33 @@ func (h *Handler) HandlerLabExecute(c echo.Context) error {
 					return
 				}
 
-				// Se houve erro na execução (Exit Code != 0)
+				// Se houve erro na execução do código do usuário
 				if state.Error != nil {
 					log.Printf("INFO [Handler]: Execução falhou: %v", state.Error)
 					ws.WriteJSON(ServerMessage{Type: "error", Payload: state.Error.Error()})
-
-					// Feedback específico se for validação
-					if isValidation {
-						ws.WriteJSON(ServerMessage{Type: "log", Payload: "❌ A validação falhou. Verifique a sua solução e tente novamente."})
-					}
+					ws.WriteJSON(ServerMessage{Type: "log", Payload: "❌ A execução falhou. Verifique o seu código e tente novamente."})
 					return
 				}
 
-				// SUCESSO (Exit Code 0)
-
-				// Se precisava validar depois de executar e não estamos já validando:
-				if shouldValidateAfter {
-					log.Printf("INFO [Handler]: Execução ok. Iniciando validação automática.")
-					ws.WriteJSON(ServerMessage{Type: "log", Payload: "\n✅ Execução concluída com sucesso. Iniciando validação...\n"})
-
-					// Inicia a Validação
-					logStream, finalState, wsID, errExec = h.labService.ValidateLab(ctx, labID)
-					if errExec != nil {
-						log.Printf("ERRO [Handler]: Falha ao iniciar validação automática: %v", errExec)
-						ws.WriteJSON(ServerMessage{Type: "error", Payload: errExec.Error()})
-						return
-					}
-
-					// Atualiza flags
-					shouldValidateAfter = false
-					isValidation = true
-
-					// Reinicia o loop com os novos canais
-					continue
+				// Execução OK — verificar validação
+				if state.ValidationResult.ExitCode != 0 && state.ValidationResult.Output != "" {
+					log.Printf("INFO [Handler]: Validação falhou (exit code %d)", state.ValidationResult.ExitCode)
+					ws.WriteJSON(ServerMessage{Type: "log", Payload: "❌ A validação falhou. Verifique a sua solução e tente novamente."})
+					return
 				}
 
+				// Tudo OK — Sucesso!
 				log.Printf("INFO [Handler]: Execução concluída com sucesso.")
 
-				if isValidation {
-					// Se foi Validação e passou -> Marca como COMPLETED
+				if state.ValidationResult.ExitCode == 0 && state.ValidationResult.Output != "" {
+					// Validação passou → Marca como COMPLETED
 					log.Printf("INFO [Handler]: Lab validado! Salvando status completed.")
 					if err := h.labService.SaveWorkspaceStatus(ctx, wsID, domain.WorkspaceStatusCompleted); err != nil {
 						log.Printf("ERRO [Handler]: Falha ao salvar status: %v", err)
 					}
 					ws.WriteJSON(ServerMessage{Type: "complete", Payload: "✅ Parabéns! Laboratório concluído com sucesso."})
 				} else {
-					// Se foi apenas Execute -> Apenas avisa que terminou
+					// Sem validação → Apenas avisa que terminou
 					ws.WriteJSON(ServerMessage{Type: "complete", Payload: "Comando executado."})
 				}
 
@@ -180,9 +154,8 @@ func (h *Handler) HandlerLabExecute(c echo.Context) error {
 				if state.NewState != nil {
 					h.labService.SaveWorkspaceState(ctx, wsID, state.NewState)
 				}
-				return // Fim da execução
+				return
 
-			// Caso C: Cancelamento do contexto HTTP
 			case <-ctx.Done():
 				log.Printf("AVISO [Handler]: Contexto cancelado.")
 				return
