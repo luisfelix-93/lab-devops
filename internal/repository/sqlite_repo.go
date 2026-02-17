@@ -43,8 +43,12 @@ func NewSQLiteRepository(dbPath string, migrationScriptPath string) (service.Wor
 
 	log.Println("✅ Base de dados SQLite conectada e migrações aplicadas.")
 	return &sqlRepository{db: db}, nil
-
 }
+
+func (r *sqlRepository) Ping(ctx context.Context) error {
+	return r.db.PingContext(ctx)
+}
+
 func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.Lab, error) {
 	query := `SELECT id, title, type, instructions, initial_code, created_at, 
 	                 track_id, lab_order, COALESCE(validation_code, '')
@@ -60,7 +64,7 @@ func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.L
 		&lab.Instructions,
 		&lab.InitialCode,
 		&lab.CreatedAt,
-		&lab.TrackID,  
+		&lab.TrackID,
 		&lab.LabOrder,
 		&lab.ValidationCode,
 	)
@@ -72,7 +76,6 @@ func (r *sqlRepository) GetLabByID(ctx context.Context, labID string) (*domain.L
 	}
 	return &lab, nil
 }
-
 
 func (r *sqlRepository) GetWorkspaceByLabID(ctx context.Context, labID string) (*domain.Workspace, error) {
 	// CORREÇÃO: Adicionado 'status' no SELECT
@@ -88,7 +91,7 @@ func (r *sqlRepository) GetWorkspaceByLabID(ctx context.Context, labID string) (
 		&ws.UserCode,
 		&ws.State,
 		&ws.UpdatedAt,
-		&ws.Status, 
+		&ws.Status,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -143,7 +146,7 @@ func (r *sqlRepository) ListLabs(ctx context.Context) ([]*domain.Lab, error) {
 			&lab.CreatedAt,
 			&lab.TrackID,  // Novo
 			&lab.LabOrder, // Novo
-			&lab.ValidationCode,	
+			&lab.ValidationCode,
 		); err != nil {
 			return nil, err
 		}
@@ -189,7 +192,7 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 		&ws.UserCode,
 		&ws.State,
 		&ws.UpdatedAt,
-		&ws.Status, 
+		&ws.Status,
 	); err != nil {
 		return nil, err
 	}
@@ -198,20 +201,20 @@ func (r *sqlRepository) CreateWorkspace(ctx context.Context, labID string) (*dom
 }
 
 func (r *sqlRepository) CreateLab(ctx context.Context, lab *domain.Lab) error {
-    query := `
+	query := `
         INSERT INTO labs (id, title, type, instructions, initial_code, track_id, lab_order, validation_code)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    _, err := r.db.ExecContext(ctx, query, 
-        lab.ID, 
-        lab.Title, 
-        lab.Type, 
-        lab.Instructions, 
-        lab.InitialCode,
+	_, err := r.db.ExecContext(ctx, query,
+		lab.ID,
+		lab.Title,
+		lab.Type,
+		lab.Instructions,
+		lab.InitialCode,
 		lab.TrackID,
 		lab.LabOrder,
 		lab.ValidationCode,
-    )
-    return err
+	)
+	return err
 }
 
 func (r *sqlRepository) CleanLab(ctx context.Context, labId string) error {
@@ -316,10 +319,10 @@ func (r *sqlRepository) CreateTrack(ctx context.Context, track *domain.Track) er
 	INSERT INTO tracks (id, title, description)
 		VALUES (?, ?, ?)
 	`
-	_, err := r.db.ExecContext(ctx, query, 
-		track.ID, 
+	_, err := r.db.ExecContext(ctx, query,
+		track.ID,
 		track.Title,
-		track.Description,	
+		track.Description,
 	)
 
 	return err
@@ -329,7 +332,7 @@ func (r *sqlRepository) UpdateLab(ctx context.Context, lab *domain.Lab) error {
 	query := `
 		UPDATE labs SET title = ?, type = ?, instructions = ?, initial_code = ?, track_id = ?, lab_order = ?, validation_code = ? WHERE id = ?
 	`
-	_, err := r.db.ExecContext(ctx, query, 
+	_, err := r.db.ExecContext(ctx, query,
 		lab.Title,
 		lab.Type,
 		lab.Instructions,
@@ -342,7 +345,7 @@ func (r *sqlRepository) UpdateLab(ctx context.Context, lab *domain.Lab) error {
 	return err
 }
 
-func (r* sqlRepository) DeleteLab(ctx context.Context, labID string) error {
+func (r *sqlRepository) DeleteLab(ctx context.Context, labID string) error {
 	query := `DELETE FROM labs WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, labID)
 	return err
@@ -352,10 +355,10 @@ func (r *sqlRepository) UpdateTrack(ctx context.Context, track *domain.Track) er
 	query := `
 		UPDATE tracks SET title = ?, description = ? WHERE id = ?
 	`
-	_, err := r.db.ExecContext(ctx, query, 
+	_, err := r.db.ExecContext(ctx, query,
 		track.Title,
 		track.Description,
-		track.ID,	
+		track.ID,
 	)
 	return err
 }

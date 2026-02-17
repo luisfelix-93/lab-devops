@@ -147,6 +147,24 @@ Initiates a WebSocket connection to execute lab code and receive real-time logs.
     -   `{"type": "error", "payload": "..."}`: An error message.
     -   `{"type": "complete", "payload": "..."}`: Completion message.
 
+### Health Check
+
+Returns the health status of the application and its dependencies (Database, Disk).
+
+-   **URL**: `/api/v1/health`
+-   **Method**: `GET`
+-   **Response**:
+    ```json
+    {
+      "status": "ok",
+      "checks": {
+        "database": "ok",
+        "disk": "ok"
+      },
+      "timestamp": "2026-02-17T10:00:00Z"
+    }
+    ```
+
 ## Database
 
 The project uses **SQLite** as its database. The database file is created at `./data/lab.db`.

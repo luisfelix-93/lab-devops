@@ -66,3 +66,4 @@ log_*.txt
 .agent/
 TODO.md
 *.spec.md
+issues/

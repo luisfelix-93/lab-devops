@@ -1,12 +1,12 @@
 package main
 
 import (
-	"log"
-	"os"
 	"lab-devops/internal/api"
 	"lab-devops/internal/executor"
 	"lab-devops/internal/repository"
 	"lab-devops/internal/service"
+	"log"
+	"os"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -41,18 +41,19 @@ func main() {
 	// 2. Camada de Lógica de Negócios (Serviço)
 	// (Injeta as implementações nas interfaces)
 	labSvc := service.NewLabService(repo, exec)
+	healthSvc := service.NewHealthService(repo)
 
 	// 3. Camada de Apresentação (API/Handlers)
-	handler := api.NewHandler(labSvc)
+	handler := api.NewHandler(labSvc, healthSvc)
 
 	// 4. Configuração do Servidor Web (Echo)
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	
+
 	// Regista as rotas
 	api.RegisterRoutes(e, handler)
-	
+
 	log.Printf("🚀 Servidor da API do Laboratório rodando na porta %s", serverPort)
 	if err := e.Start(serverPort); err != nil {
 		log.Fatalf("Falha ao iniciar o servidor Echo: %v", err)

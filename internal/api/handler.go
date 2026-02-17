@@ -19,12 +19,14 @@ var (
 )
 
 type Handler struct {
-	labService *service.LabService
+	labService    *service.LabService
+	healthService *service.HealthService
 }
 
-func NewHandler(svc *service.LabService) *Handler {
+func NewHandler(svc *service.LabService, healthSvc *service.HealthService) *Handler {
 	return &Handler{
-		labService: svc,
+		labService:    svc,
+		healthService: healthSvc,
 	}
 }
 
