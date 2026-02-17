@@ -1,134 +1,57 @@
-# PR Summary — `21e12ed` (v4) — Refactoring: Session Manager Executor & Validation Pipeline
+# PR Summary — `75e6906` (v4) — Feature: Health Check API
 
 > **Branch:** `v4`
-> **Commit:** `21e12edc2756` — `20260214 - correção`
+> **Commit:** `75e690687d7f` — `20260217 - #11 implementação de health-check`
 > **Author:** luisfelix-93
-> **Date:** 2026-02-14
+> **Date:** 2026-02-17
 
 ---
 
 ## 🎯 Objetivo
 
-Este commit implementa uma refatoração profunda na camada de execução do Lab DevOps, substituindo o modelo antigo de **"container efêmero único"** por um novo padrão de **"Session Manager"** — onde um container de longa duração é reutilizado para múltiplos passos (`exec` + `validate`). Além disso, o fluxo de validação foi movido do Handler (camada de apresentação) para o Executor (camada de execução), seguindo melhor o princípio de separação de responsabilidades.
+Implementar um endpoint de **Health Check** (`/api/v1/health`) para monitorização do estado da aplicação e das suas dependências críticas (base de dados e sistema de ficheiros). Este endpoint permite que sistemas externos (load balancers, K8s probes, dashboards de status) verifiquem se a API está operacional.
 
 ---
 
-## 📁 Arquivos Alterados (5 ficheiros, +268 / -328 linhas)
+## 📁 Arquivos Alterados (5 ficheiros)
 
-| Arquivo | Tipo | Impacto |
-|---------|------|---------|
-| `.gitignore` | Config | 🟢 Baixo |
-| `internal/api/handler.go` | Apresentação | 🔴 Alto |
-| `internal/executor/docker_executor.go` | Execução | 🔴 Crítico |
-| `internal/service/ports.go` | Domínio | 🟡 Médio |
-| `internal/repository/sqlite_repo.go` | Dados | 🟢 Sem alteração funcional |
-
----
-
-## 🛠️ Detalhes Técnicos por Arquivo
-
-### 1. `internal/executor/docker_executor.go` — **REESCRITA COMPLETA**
-
-**Antes (Modelo Antigo — "Run & Wait"):**
-- Criava um container com o comando de execução já definido no `Entrypoint/Cmd`.
-- Usava `ContainerLogs` + `ContainerWait` para capturar stdout/stderr.
-- O container morria automaticamente ao final do comando.
-- A validação era tratada inline (encadeada no mesmo comando shell, e.g. `ansible-playbook ... && ansible-playbook validation.yml`).
-- Funções: `getContainerConfig()`, `streamLogs()`, `buildCommand()`, `streamPipe()`.
-
-**Depois (Modelo Novo — "Session Manager"):**
-- O container é criado com `Entrypoint: ["tail", "-f", "/dev/null"]` — mantém-se vivo indefinidamente.
-- Cada passo (execução e validação) é executado via `ContainerExecCreate` + `ContainerExecAttach`.
-- Stream de logs usa `stdcopy.StdCopy` → `io.Pipe` → `bufio.Scanner` (por linha).
-- Container é removido explicitamente no `defer e.stopContainer()`.
-
-**Novos Métodos:**
-
-| Método | Responsabilidade |
-|--------|-----------------|
-| `startContainer()` | Cria e inicia o container com retry (3 tentativas, delay crescente 1.5s/3s) para lidar com race conditions do Docker Desktop WSL2. |
-| `stopContainer()` | Remove forçosamente o container ao final. |
-| `getStepCommand()` | Retorna o comando e variáveis de ambiente para cada tipo de lab (Terraform, Ansible, Linux, K8s, Docker, GH Actions), separando execução de validação. |
-| `execStep()` | Executa um comando dentro do container via `exec`, captura logs em tempo real (por linha) e retorna `domain.StepResult`. |
-| `runWithRetry()` | Execução com retry para validação K8s (timeout 30s, ticker 2s). Aguarda recursos Kubernetes ficarem prontos. |
-
-**Remoções:**
-
-| Método Removido | Motivo |
-|-----------------|--------|
-| `getContainerConfig()` | Substituído pela lógica em `startContainer()` + `getStepCommand()`. |
-| `streamLogs()` | Substituído pelo `bufio.Scanner` inline em `execStep()`. |
-| `buildCommand()` | Eliminado — não há mais uso de `exec.Command("docker", ...)`, toda interação é via Docker SDK. |
-| `streamPipe()` | Integrado diretamente no `execStep()`. |
-
-**Imports Removidos:** `os/exec` (não há mais chamadas CLI ao Docker).
-**Imports Adicionados:** `time` (retry delays e sync de filesystem WSL2).
-
-**Workarounds Documentados:**
-- `time.Sleep(1 * time.Second)` após `prepareWorkspace` — sincronização de filesystem Docker Desktop WSL2.
-- `time.Sleep(500 * time.Millisecond)` antes de `execStep` — garante que o container está pronto.
-- Retry loop (3x) no `startContainer` — lida com falhas transitórias de bind mount.
+| Arquivo | Tipo | Impacto | Detalhe |
+|---------|------|---------|---------|
+| `internal/api/health_handler.go` | [NEW] Apresentação | 🟢 Baixo | Handler HTTP para o endpoint `/health`. |
+| `internal/api/routes.go` | [MODIFY] Config | 🟢 Baixo | Registo da rota GET `/api/v1/health`. |
+| `internal/service/health_service.go` | [NEW] Domínio | 🟢 Baixo | Lógica de verificação (DB Ping, Disk Write). |
+| `internal/service/ports.go` | [MODIFY] Contrato | 🟡 Médio | Adição do método `Ping()` à interface `WorkspaceRepository`. |
+| `internal/repository/sqlite_repo.go` | [MODIFY] Dados | 🟢 Baixo | Implementação de `Ping()` usando `sql.DB.PingContext`. |
 
 ---
 
-### 2. `internal/api/handler.go` — **SIMPLIFICAÇÃO DO HANDLER**
+## 🛠️ Detalhes Técnicos
 
-**Antes:**
-- O handler usava flags `isValidation` e `shouldValidateAfter` para gerenciar um fluxo de dois estágios:
-  1. `Execute` → sucesso → chamar `ValidateLab` → reabrir canais → continuar streaming.
-- Lógica de state machine complexa dentro da goroutine de streaming.
-- A validação automática era orquestrada na **camada de apresentação**.
+### 1. Novo Endpoint: `GET /api/v1/health`
 
-**Depois:**
-- O handler é um **consumidor passivo** dos canais `logStream` e `finalState`.
-- **Não existe mais duas fases**: o `Execute` do executor já retorna `ExecutionResult` e `ValidationResult` como campos separados no `ExecutionFinalState`.
-- O handler apenas inspeciona:
-  - `state.Error` → falha na execução.
-  - `state.ValidationResult.ExitCode != 0` → falha na validação.
-  - `state.ValidationResult.ExitCode == 0 && Output != ""` → sucesso, marca `WorkspaceStatusCompleted`.
-- **Remoção de variáveis:** `isValidation`, `shouldValidateAfter`.
-- **Remoção de lógica:** chamada recursiva a `ValidateLab`, re-assignment de canais, flags de controle.
+O endpoint retorna um status agregado HTTP 200 (OK) ou 503 (Service Unavailable) e um payload JSON detalhado:
 
-**Impacto:** O Handler passou de **333 linhas para 306 linhas** — mais legível e com responsabilidade única (streaming + feedback ao cliente).
-
----
-
-### 3. `internal/service/ports.go` — **EXPANSÃO DO CONTRATO**
-
-**Antes:**
-```go
-type ExecutionFinalState struct {
-    WorkspaceID string
-    NewState    []byte
-    Error       error
+```json
+{
+  "status": "ok",      // "ok", "degraded", "unavailable"
+  "checks": {
+    "database": "ok",
+    "disk": "ok"
+  },
+  "timestamp": "2026-02-17T10:00:00Z"
 }
 ```
 
-**Depois:**
-```go
-type ExecutionFinalState struct {
-    WorkspaceID      string
-    NewState         []byte
-    Error            error
-    ExecutionResult  domain.StepResult  // ← NOVO
-    ValidationResult domain.StepResult  // ← NOVO
-}
-```
+### 2. Service Layer (`HealthService`)
 
-Adição de `ExecutionResult` e `ValidationResult` como campos tipados (`domain.StepResult`), permitindo que o handler inspecione exit codes e outputs de cada fase separadamente — sem precisar orquestrar chamadas adicionais ao serviço.
+O serviço `HealthService` orquestra as verificações:
+- **Base de Dados:** Chama `repo.Ping(ctx)`. Se falhar, o status global torna-se `unavailable`.
+- **Disco:** Verifica se é possível criar e remover um ficheiro temporário (`checkDiskWritable`). Se falhar, o status torna-se `degraded` (assumindo que a app ainda pode ler, mas não gravar logs/estados).
 
----
+### 3. Repository Layer (`Ping`)
 
-### 4. `.gitignore` — **REFINAMENTOS**
-
-| Alteração | Detalhe |
-|-----------|---------|
-| `!data/temp-exec/` | Permite versionamento do diretório de execução temporária (via `.gitkeep`). |
-| `!data/temp-exec/.gitkeep` | Garante que o diretório existe no clone. |
-| `log_*.txt` | Expandido de `log_execução.txt` para cobrir todos os logs temporários. |
-| `.agent/` | Ignora o diretório do agente AI. |
-| `TODO.md` | Ignora ficheiro de tracking local. |
-| `*.spec.md` | Ignora ficheiros de especificação locais. |
+A interface `WorkspaceRepository` foi expandida para incluir o método `Ping(ctx context.Context) error`.
+No `SQLiteRepository`, isto é implementado delegando para o driver SQL nativo (`r.db.PingContext(ctx)`), garantindo que a conexão à base de dados está viva.
 
 ---
 
@@ -138,32 +61,14 @@ Adição de `ExecutionResult` e `ValidationResult` como campos tipados (`domain.
 
 | Risco | Severidade | Mitigação |
 |-------|-----------|-----------|
-| Containers órfãos se `stopContainer` falhar | 🟡 Médio | `defer` + `Force: true` no remove. Monitoring recomendado. |
-| WSL2 sync delays (1s + 500ms) | 🟢 Baixo | Workaround documentado. Funciona em produção (Linux nativo) sem delay. |
-| Retry loop pode mascarar erros persistentes | 🟡 Médio | Máximo 3 tentativas com logging. Falha final é propagada. |
-| `runWithRetry` timeout fixo (30s) para K8s | 🟡 Médio | Adequado para labs simples. Pode necessitar configuração dinâmica para labs complexos. |
-
-### Tipos de Lab Afetados
-
-| Tipo | Impacto |
-|------|---------|
-| Terraform | ✅ Testado — execução + leitura de state. |
-| Ansible | ✅ Validação separada (antes era encadeada no shell). |
-| Linux/Docker | ✅ Sem mudança funcional (run.sh). |
-| Kubernetes | ✅ Novo: retry na validação com timeout. |
-| GitHub Actions | ✅ Sem mudança funcional. |
+| **Disk Check I/O** | 🟢 Baixo | O teste de disco e/s criar um ficheiro vazio e remove-o imediatamente. É rápido e de baixo impacto, mas executado a cada request. Em high-load pode gerar noise de I/O (considerar cache futura se necessário). |
+| **Exposure** | 🟢 Baixo | O endpoint é público. Não expõe detalhes sensíveis do sistema (apenas "ok" ou erro genérico). |
 
 ---
 
 ## ✅ Checklist de Revisão
 
-- [ ] Verificar que containers órfãos não acumulam (após falhas).
-- [ ] Testar execução Terraform com state persistence.
-- [ ] Testar validação Ansible (agora em passo separado vs. encadeada).
-- [ ] Testar retry de validação K8s (simular recurso não pronto).
-- [ ] Validar comportamento em ambiente Linux nativo (sem WSL2 delays).
-- [ ] Confirmar que o `.gitignore` não está excluindo ficheiros necessários.
-
----
-
-*Gerado em 2026-02-14 a partir da análise do commit `21e12ed` (branch `v4`).*
+- [x] Endpoint responde 200 OK quando tudo está saudável.
+- [x] Endpoint responde 503 quando o DB está em baixo (simulado).
+- [x] Verificado que o ficheiro temporário de teste de disco é removido (não deixa lixo).
+- [x] Interface `WorkspaceRepository` atualizada corretamente em todos os consumidores.

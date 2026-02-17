@@ -1,3 +1,37 @@
+# Release Notes — v4.20260217
+
+> **Data:** 2026-02-17
+> **Branch:** `v4`
+> **Commit:** `75e6906`
+
+---
+
+## 🌟 Destaques
+
+### Monitorização com Health Check API
+
+Implementado um novo endpoint `/api/v1/health` para monitorização contínua do estado da aplicação. Isso permite que infraestruturas externas (como Kubernetes ou Load Balancers) verifiquem automaticamente a saúde do serviço.
+
+**O que muda para o utilizador:**
+- 🛡️ **Maior fiabilidade** — o sistema agora reporta proativamente se a base de dados ou o disco estão inacessíveis.
+- 🚦 **Integração simplificada** — endpoint padrão JSON para dashboards de status.
+
+---
+
+## 🚀 Melhorias e Alterações
+
+### Backend — API (`internal/api/`)
+
+- **Novo Endpoint:** `GET /health` responde com status 200 (OK) ou 503 (Service Unavailable).
+- **Detalhamento:** Resposta JSON inclui estado individual da `database` e `disk`.
+
+### Backend — Service & Repository (`internal/service/`, `internal/repository/`)
+
+- **`HealthService`**: Lógica centralizada para agregar verificações de sistema.
+- **`Ping()`**: Adicionado método à interface de repositório e implementação SQLite para validar conexão ativa.
+
+---
+
 # Release Notes — v4.20260214
 
 > **Data:** 2026-02-14
