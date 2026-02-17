@@ -244,3 +244,35 @@ A documentação do código não especifica um método de autenticação. Assume
   - **400 Bad Request:** Payload da requisição é inválido.
   - **500 Internal Server Error:** Falha ao atualizar o laboratório.
 
+
+### Sistema
+
+---
+
+#### **GET /health**
+
+- **Descrição:** Verifica a saúde da aplicação e suas dependências (Banco de Dados, Disco).
+- **Respostas:**
+  - **200 OK:** Aplicação saudável.
+    ```json
+    {
+      "status": "ok",
+      "checks": {
+        "database": "ok",
+        "disk": "ok"
+      },
+      "timestamp": "2026-02-17T10:00:00Z"
+    }
+    ```
+  - **503 Service Unavailable:** Aplicação ou dependência crítica indisponível.
+    ```json
+    {
+      "status": "unavailable",
+      "checks": {
+        "database": "error: ...",
+        "disk": "ok"
+      },
+      "timestamp": "..."
+    }
+    ```
+

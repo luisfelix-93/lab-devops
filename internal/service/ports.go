@@ -42,4 +42,5 @@ type WorkspaceRepository interface {
 	UpdateTrack(ctx context.Context, track *domain.Track) error
 	DeleteTrack(ctx context.Context, trackID string) error
 	GetTrackByID(ctx context.Context, id string) (*domain.Track, error)
+	Ping(ctx context.Context) error
 }

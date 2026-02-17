@@ -8,17 +8,18 @@ import (
 func RegisterRoutes(e *echo.Echo, h *Handler) {
 	// Agrupa as rotas sob /api/v1
 	g := e.Group("/api/v1")
-	
+
+	// Rota de Health Check
+	g.GET("/health", h.HandleHealthCheck)
+
 	// Rota para buscar os detalhes de um Lab (HTTP GET)
 	// ex: GET /api/v1/labs/lab-tf-01
 	g.GET("/labs/:labID", h.HandleGetLabDetails)
-	
+
 	// Rota para executar um Lab (WebSocket)
 	// ex: WS /api/v1/labs/lab-tf-01/execute
 	g.GET("/labs/:labID/execute", h.HandlerLabExecute)
 
-	
-	
 	// Rota para listar todos os labs
 	g.GET("/labs", h.HandleListLabs)
 
@@ -29,12 +30,11 @@ func RegisterRoutes(e *echo.Echo, h *Handler) {
 	g.DELETE("/labs/:labId", h.HandlerDeleteLab)
 
 	g.GET("/tracks", h.HandleListTracks)
-    // Rota para criar uma nova Trilha
-    g.POST("/tracks", h.HandleCreateTrack)
+	// Rota para criar uma nova Trilha
+	g.POST("/tracks", h.HandleCreateTrack)
 
 	g.PATCH("/tracks/:trackId", h.HandleUpdateTrack)
 	g.DELETE("/tracks/:trackId", h.HandleDeleteTrack)
-
 
 	g.PATCH("/labs/:labId", h.HandleUpdateLab)
 	g.DELETE("/labs/:labId", h.HandlerDeleteLab)
